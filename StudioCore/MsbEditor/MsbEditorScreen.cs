@@ -45,6 +45,13 @@ namespace StudioCore.MsbEditor
         public bool AltHeld;
 
         private int _createEntityMapIndex = 0;
+        private int DupIncrement = 0;
+        private int XWidth = 0;
+        private int YHeight = 0;
+        private int XIdOffset = 0;
+        private int YIdOffset = 0;
+        private float XPosOffset = 0;
+        private float YPosOffset = 0;
 
         private static object _lock_PauseUpdate = new object();
         private bool _PauseUpdate;
@@ -283,6 +290,44 @@ namespace StudioCore.MsbEditor
                 if (ImGui.MenuItem("Duplicate", "Ctrl+D", false, _selection.IsSelection()))
                 {
                     var action = new CloneMapObjectsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true);
+                    EditorActionManager.ExecuteAction(action);
+                }
+                if (ImGui.InputInt("Dup Increment", ref DupIncrement, 1000, 100))
+                {
+                    this.DupIncrement = DupIncrement;
+                }
+                if (ImGui.MenuItem("Duplicate and Increment IDs", "Ctrl+L", false, _selection.IsSelection()))
+                {
+                    var action = new CloneMapObjectsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, DupIncrement);
+                    EditorActionManager.ExecuteAction(action);
+                }
+                if (ImGui.InputInt("Columns", ref XWidth, 1, 10))
+                {
+                    this.XWidth = XWidth;
+                }
+                if (ImGui.InputInt("Rows", ref YHeight, 1, 10))
+                {
+                    this.YHeight = YHeight;
+                }
+                if (ImGui.InputInt("XIdOffset", ref XIdOffset, 1, 10))
+                {
+                    this.XIdOffset = XIdOffset;
+                }
+                if (ImGui.InputInt("YIdOffset", ref YIdOffset, 1, 10))
+                {
+                    this.YIdOffset = YIdOffset;
+                }
+                if (ImGui.InputFloat("XPosOffset", ref XPosOffset))
+                {
+                    this.XPosOffset = XPosOffset;
+                }
+                if (ImGui.InputFloat("YPosOffset", ref YPosOffset))
+                {
+                    this.YPosOffset = YPosOffset;
+                }
+                if (ImGui.MenuItem("Generate Grid Dungeon", "Ctrl+J", false, _selection.IsSelection()))
+                {
+                    var action = new GenerateGridObjectsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, XWidth, YHeight, XIdOffset, YIdOffset, XPosOffset, YPosOffset);
                     EditorActionManager.ExecuteAction(action);
                 }
 

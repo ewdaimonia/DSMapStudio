@@ -142,6 +142,7 @@ namespace StudioCore.MsbEditor
         private List<MapEntity> Clones = new List<MapEntity>();
         private List<ObjectContainer> CloneMaps = new List<ObjectContainer>();
         private bool SetSelection;
+        private int? IncrementAmount = null;
 
         private static Regex TrailIDRegex = new Regex(@"_(?<id>\d+)$");
 
@@ -151,6 +152,15 @@ namespace StudioCore.MsbEditor
             Scene = scene;
             Clonables.AddRange(objects);
             SetSelection = setSelection;
+        }
+
+        public CloneMapObjectsAction(Universe univ, Scene.RenderScene scene, List<MapEntity> objects, bool setSelection, int incrementAmount)
+        {
+            Universe = univ;
+            Scene = scene;
+            Clonables.AddRange(objects);
+            SetSelection = setSelection;
+            IncrementAmount = incrementAmount;
         }
 
         public override ActionEvent Execute()
@@ -193,6 +203,10 @@ namespace StudioCore.MsbEditor
                         }
                         newobj.Name = Clonables[i].Name.Substring(0, Clonables[i].Name.Length - idstring.Length) + newid;
                         objectnames[Clonables[i].MapID].Add(newobj.Name);
+                        if (IncrementAmount != null)
+                        {
+                            ((MSBE.Part)newobj.WrappedObject).EntityID = ((MSBE.Part)newobj.WrappedObject).EntityID + IncrementAmount.Value;
+                        }
                     }
                     else
                     {
@@ -241,6 +255,175 @@ namespace StudioCore.MsbEditor
                 foreach (var c in Clones)
                 {
                     Universe.Selection.AddSelection(c);
+                }
+            }
+            return ActionEvent.ObjectAddedRemoved;
+        }
+
+        public override ActionEvent Undo()
+        {
+            for (int i = 0; i < Clones.Count(); i++)
+            {
+                CloneMaps[i].Objects.Remove(Clones[i]);
+                if (Clones[i] != null)
+                {
+                    Clones[i].Parent.RemoveChild(Clones[i]);
+                }
+                if (Clones[i].RenderSceneMesh != null)
+                {
+                    Clones[i].RenderSceneMesh.AutoRegister = false;
+                    Clones[i].RenderSceneMesh.UnregisterWithScene();
+                }
+            }
+            // Clones.Clear();
+            if (SetSelection)
+            {
+                Universe.Selection.ClearSelection();
+                foreach (var c in Clonables)
+                {
+                    Universe.Selection.AddSelection(c);
+                }
+            }
+            return ActionEvent.ObjectAddedRemoved;
+        }
+    }
+
+    public class GenerateGridObjectsAction : Action
+    {
+        private Universe Universe;
+        private Scene.RenderScene Scene;
+        private List<MapEntity> Clonables = new List<MapEntity>();
+        private List<MapEntity> Clones = new List<MapEntity>();
+        private List<ObjectContainer> CloneMaps = new List<ObjectContainer>();
+        private bool SetSelection;
+        private int XWidth = 0;
+        private int YHeight = 0;
+        private int XIdOffset = 0;
+        private int YIdOffset = 0;
+        private float XPosOffset = 0;
+        private float YPosOffset = 0;
+
+
+        private static Regex TrailIDRegex = new Regex(@"_(?<id>\d+)$");
+
+        public GenerateGridObjectsAction(Universe univ, Scene.RenderScene scene, List<MapEntity> objects, bool setSelection, int XWidth, int YHeight, int XIdOffset, int YIdOffset, float XPosOffset, float YPosOffset)
+        {
+            Universe = univ;
+            Scene = scene;
+            Clonables.AddRange(objects);
+            SetSelection = setSelection;
+            this.XWidth = XWidth;
+            this.YHeight = YHeight;
+            this.XIdOffset = XIdOffset;
+            this.YIdOffset = YIdOffset;
+            this.XPosOffset = XPosOffset;
+            this.YPosOffset = YPosOffset;
+        }
+
+        public override ActionEvent Execute()
+        {
+            bool clonesCached = Clones.Count() > 0;
+            // foreach (var obj in Clonables)
+            if (XWidth != 0 && YHeight != 0 && XIdOffset != 0 && YIdOffset != 0 && XPosOffset != 0 && YPosOffset != 0)
+            {
+                var objectnames = new Dictionary<string, HashSet<string>>();
+                for (int y = 0; y < YHeight; y++)
+                {
+                    for (int x = 0; x < XWidth; x++)
+                    {
+                        for (int i = 0; i < Clonables.Count(); i++)
+                        {
+                            var m = Universe.GetLoadedMap(Clonables[i].MapID);
+                            if (m != null)
+                            {
+                                // Get list of names that exist so our duplicate names don't trample over them
+                                if (!objectnames.ContainsKey(Clonables[i].MapID))
+                                {
+                                    var nameset = new HashSet<string>();
+                                    foreach (var n in m.Objects)
+                                    {
+                                        nameset.Add(n.Name);
+                                    }
+                                    objectnames.Add(Clonables[i].MapID, nameset);
+                                }
+
+                                // If this was executed in the past we reused the cloned objects so because redo
+                                // actions that follow this may reference the previously cloned object
+                                MapEntity newobj = clonesCached ? Clones[i] : (MapEntity)Clonables[i].Clone();
+
+                                // Use pattern matching to attempt renames based on appended ID
+                                Match idmatch = TrailIDRegex.Match(Clonables[i].Name);
+                                if (idmatch.Success)
+                                {
+                                    var idstring = idmatch.Result("${id}");
+                                    int id = int.Parse(idstring);
+                                    string newid = idstring;
+                                    while (objectnames[Clonables[i].MapID].Contains(Clonables[i].Name.Substring(0, Clonables[i].Name.Length - idstring.Length) + newid))
+                                    {
+                                        id++;
+                                        newid = id.ToString("D" + idstring.Length.ToString());
+                                    }
+                                    newobj.Name = Clonables[i].Name.Substring(0, Clonables[i].Name.Length - idstring.Length) + newid;
+                                    objectnames[Clonables[i].MapID].Add(newobj.Name);
+
+                                    ((MSBE.Part)newobj.WrappedObject).EntityID = ((MSBE.Part)newobj.WrappedObject).EntityID + (x * XIdOffset) + (y * YIdOffset);
+                                    ((MSBE.Part)newobj.WrappedObject).Position = new System.Numerics.Vector3(
+                                        ((MSBE.Part)newobj.WrappedObject).Position.X + (x * XPosOffset),
+                                        ((MSBE.Part)newobj.WrappedObject).Position.Y,
+                                        ((MSBE.Part)newobj.WrappedObject).Position.Z + (y * YPosOffset)
+                                    );
+                                }
+                                else
+                                {
+                                    var idstring = "0001";
+                                    int id = int.Parse(idstring);
+                                    string newid = idstring;
+                                    while (objectnames[Clonables[i].MapID].Contains(Clonables[i].Name + "_" + newid))
+                                    {
+                                        id++;
+                                        newid = id.ToString("D" + idstring.Length.ToString());
+                                    }
+                                    newobj.Name = Clonables[i].Name + "_" + newid;
+                                    objectnames[Clonables[i].MapID].Add(newobj.Name);
+                                }
+
+                                m.Objects.Insert(m.Objects.IndexOf(Clonables[i]) + 1, newobj);
+                                if (Clonables[i].Parent != null)
+                                {
+                                    int idx = Clonables[i].Parent.ChildIndex(Clonables[i]);
+                                    Clonables[i].Parent.AddChild(newobj, idx);
+                                }
+                                newobj.UpdateRenderModel();
+                                if (newobj.RenderSceneMesh != null)
+                                {
+                                    newobj.RenderSceneMesh.SetSelectable(newobj);
+                                }
+                                if (!clonesCached)
+                                {
+                                    Clones.Add(newobj);
+                                    CloneMaps.Add(m);
+                                    m.HasUnsavedChanges = true;
+                                }
+                                else
+                                {
+                                    if (Clones[i].RenderSceneMesh != null)
+                                    {
+                                        Clones[i].RenderSceneMesh.AutoRegister = true;
+                                        Clones[i].RenderSceneMesh.Register();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (SetSelection)
+                {
+                    Universe.Selection.ClearSelection();
+                    foreach (var c in Clones)
+                    {
+                        Universe.Selection.AddSelection(c);
+                    }
                 }
             }
             return ActionEvent.ObjectAddedRemoved;
@@ -379,7 +562,7 @@ namespace StudioCore.MsbEditor
             foreach (var row in Clonables)
             {
                 var newrow = new PARAM.Row(row);
-                if (Param[(int) row.ID] == null)
+                if (Param[(int)row.ID] == null)
                 {
                     newrow.Name = row.Name != null ? row.Name : "";
                     int index = 0;
@@ -394,7 +577,7 @@ namespace StudioCore.MsbEditor
                 else
                 {
                     newrow.Name = row.Name != null ? row.Name + "_1" : "";
-                    Param.Rows.Insert(Param.Rows.IndexOf(Param[(int) row.ID]) + 1, newrow);
+                    Param.Rows.Insert(Param.Rows.IndexOf(Param[(int)row.ID]) + 1, newrow);
                 }
                 Clones.Add(newrow);
             }
@@ -834,7 +1017,7 @@ namespace StudioCore.MsbEditor
         /// Change selected map objects from one type to another. Only works for map objects of the same overarching type, such as Parts or Regions.
         /// Data for properties absent in targeted type will be lost, but will be restored for undo/redo.
         /// </summary>
-        public ChangeMapObjectType(Universe univ, Type msbclass, List<MapEntity> selectedEnts, string[] sourceTypes, string[] targetTypes, string msbParamStr ,bool setSelection)
+        public ChangeMapObjectType(Universe univ, Type msbclass, List<MapEntity> selectedEnts, string[] sourceTypes, string[] targetTypes, string msbParamStr, bool setSelection)
         {
 
             Universe = univ;
