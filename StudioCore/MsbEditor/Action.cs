@@ -448,7 +448,10 @@ namespace StudioCore.MsbEditor
                                     newobj.Name = Clonables[i].Name.Substring(0, Clonables[i].Name.Length - idstring.Length) + newid;
                                     objectnames[Clonables[i].MapID].Add(newobj.Name);
 
-                                    ((MSBE.Part)newobj.WrappedObject).EntityID = ((MSBE.Part)newobj.WrappedObject).EntityID + (x * XIdOffset) + (y * YIdOffset);
+                                    if(((MSBE.Part)newobj.WrappedObject).EntityID != 0 && ((MSBE.Part)newobj.WrappedObject).EntityID != -1)
+                                    {
+                                        ((MSBE.Part)newobj.WrappedObject).EntityID = ((MSBE.Part)newobj.WrappedObject).EntityID + (x * XIdOffset) + (y * YIdOffset);
+                                    }
                                     ((MSBE.Part)newobj.WrappedObject).Position = new System.Numerics.Vector3(
                                         ((MSBE.Part)newobj.WrappedObject).Position.X + (x * XPosOffset),
                                         ((MSBE.Part)newobj.WrappedObject).Position.Y,
