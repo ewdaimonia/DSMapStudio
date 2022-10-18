@@ -11,17 +11,20 @@ using System.Globalization;
 using System.Threading;
 using System.Runtime.InteropServices;
 using System.Reflection;
+using System.Threading.Tasks;
+using SoapstoneLib;
 using StudioCore.ParamEditor;
 using Veldrid;
 using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
+using System.Windows.Forms;
 
 namespace StudioCore
 {
     public class MapStudioNew
     {
-        private static string _version = "version 1.02.5";
-        private static string _programTitle = $"Dark Souls Map Studio {_version}";
+        private static string _version = "1.04";
+        private static string _programTitle = $"Dark Souls Map Studio version {_version}";
 
         private Sdl2Window _window;
         private GraphicsDevice _gd;
@@ -58,6 +61,8 @@ namespace StudioCore
         private ParamEditor.ParamEditorScreen _paramEditor;
         private bool _textEditorFocused = false;
         private TextEditor.TextEditorScreen _textEditor;
+
+        private SoapstoneService _soapstoneService;
 
         public static RenderDoc RenderDocManager;
 
@@ -131,9 +136,11 @@ namespace StudioCore
             _modelEditor = new MsbEditor.ModelEditorScreen(_window, _gd, _assetLocator);
             _paramEditor = new ParamEditor.ParamEditorScreen(_window, _gd);
             _textEditor = new TextEditor.TextEditorScreen(_window, _gd);
+            _soapstoneService = new SoapstoneService(_version, _assetLocator, _msbEditor);
 
             Editor.AliasBank.SetAssetLocator(_assetLocator);
-            ParamEditor.ParamBank.SetAssetLocator(_assetLocator);
+            ParamEditor.ParamBank.PrimaryBank.SetAssetLocator(_assetLocator);
+            ParamEditor.ParamBank.VanillaBank.SetAssetLocator(_assetLocator);
             TextEditor.FMGBank.SetAssetLocator(_assetLocator);
             MsbEditor.MtdBank.LoadMtds(_assetLocator);
 
@@ -235,31 +242,8 @@ namespace StudioCore
             Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
         }
 
-        public void SetupParamStudioConfig()
+        public void ManageImGuiConfigBackups()
         {
-            string self = System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName;
-            Utils.setRegistry("executable", self);
-            string reg = Utils.readRegistry("showAltNamesPreference");
-            if (reg != null)
-                ParamEditor.ParamEditorScreen.ShowAltNamesPreference = reg == "true";
-            reg = Utils.readRegistry("alwaysShowOriginalNamePreference");
-            if (reg != null)
-                ParamEditor.ParamEditorScreen.AlwaysShowOriginalNamePreference = reg == "true";
-            reg = Utils.readRegistry("hideReferenceRowsPreference");
-            if (reg != null)
-                ParamEditor.ParamEditorScreen.HideReferenceRowsPreference = reg == "true";
-            reg = Utils.readRegistry("hideEnumsPreference");
-            if (reg != null)
-                ParamEditor.ParamEditorScreen.HideEnumsPreference = reg == "true";
-            reg = Utils.readRegistry("allFieldReorderPreference");
-            if (reg != null)
-                ParamEditor.ParamEditorScreen.AllowFieldReorderPreference = reg == "true";
-            reg = Utils.readRegistry("showVanillaParamsPreference");
-            if (reg != null)
-                ParamEditor.ParamEditorScreen.ShowVanillaParamsPreference = reg == "true";
-            reg = Utils.readRegistry("csvDelimiterPreference");
-            if (reg != null)
-                ParamEditor.ParamEditorScreen.CSVDelimiterPreference = reg.Substring(0, 1);
             if (!File.Exists("imgui.ini"))
             {
                 if (File.Exists("imgui.ini.backup"))
@@ -271,22 +255,16 @@ namespace StudioCore
                     File.Copy("imgui.ini", "imgui.ini.backup");
             }
         }
-        public void SaveParamStudioConfig()
-        {
-            Utils.setRegistry("showAltNamesPreference", ParamEditor.ParamEditorScreen.ShowAltNamesPreference ? "true" : "false");
-            Utils.setRegistry("alwaysShowOriginalNamePreference", ParamEditor.ParamEditorScreen.AlwaysShowOriginalNamePreference ? "true" : "false");
-            Utils.setRegistry("hideReferenceRowsPreference", ParamEditor.ParamEditorScreen.HideReferenceRowsPreference ? "true" : "false");
-            Utils.setRegistry("hideEnumsPreference", ParamEditor.ParamEditorScreen.HideEnumsPreference ? "true" : "false");
-            Utils.setRegistry("allFieldReorderPreference", ParamEditor.ParamEditorScreen.AllowFieldReorderPreference ? "true" : "false");
-            Utils.setRegistry("alphabeticalParamsPreference", ParamEditor.ParamEditorScreen.AlphabeticalParamsPreference ? "true" : "false");
-            Utils.setRegistry("showVanillaParamsPreference", ParamEditor.ParamEditorScreen.ShowVanillaParamsPreference ? "true" : "false");
-            Utils.setRegistry("csvDelimiterPreference", ParamEditor.ParamEditorScreen.CSVDelimiterPreference);
-        }
 
         public void Run()
         {
             SetupCSharpDefaults();
-            SetupParamStudioConfig();
+            ManageImGuiConfigBackups();
+
+            if (CFG.Current.EnableSoapstone)
+            {
+                SoapstoneServer.RunAsync(KnownServer.DSMapStudio, _soapstoneService);
+            }
             /*Task.Run(() =>
             {
                 while (true)
@@ -308,6 +286,9 @@ namespace StudioCore
             Tracy.Startup();
             while (_window.Exists)
             {
+                // Make sure any awaited UI thread work has a chance to complete
+                //await Task.Yield();
+                
                 Tracy.TracyCFrameMark();
 
                 // Limit frame rate when window isn't focused unless we are profiling
@@ -360,13 +341,39 @@ namespace StudioCore
             }
 
             //DestroyAllObjects();
-            SaveParamStudioConfig();
             Tracy.Shutdown();
             Resource.ResourceManager.Shutdown();
             _gd.Dispose();
             CFG.Save();
 
             System.Windows.Forms.Application.Exit();
+        }
+
+        // Try to shutdown things gracefully on a crash
+        public void CrashShutdown()
+        {
+            Tracy.Shutdown();
+            Resource.ResourceManager.Shutdown();
+            _gd.Dispose();
+            System.Windows.Forms.Application.Exit();
+        }
+
+        private string CrashLogPath = $"{Directory.GetCurrentDirectory()}\\Crash Logs";
+        public void ExportCrashLog(List<string> exceptionInfo)
+        {
+            var time = $"{DateTime.Now:yyyy-M-dd--HH-mm-ss}";
+            exceptionInfo.Insert(0, $"Version {_version}");
+            Directory.CreateDirectory($"{CrashLogPath}");
+            File.WriteAllLines($"{CrashLogPath}\\Log {time}.txt", exceptionInfo);
+            MessageBox.Show($"DSMapStudio has run into an issue.\nCrash log has been generated in {CrashLogPath}.", $"Multiple Unhandled Errors - {_version}", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        public void ExportCrashLog(string exceptionInfo)
+        {
+            var time = $"{DateTime.Now:yyyy-M-dd--HH-mm-ss}";
+            exceptionInfo.Insert(0, $"Version {_version}");
+            Directory.CreateDirectory($"{CrashLogPath}");
+            File.WriteAllText($"{CrashLogPath}\\Log {time}.txt", exceptionInfo);
+            MessageBox.Show($"DSMapStudio has run into an issue.\nCrash log has been generated in {CrashLogPath}.\n\n{exceptionInfo}", $"Unhandled Error - {_version}", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
         private void ChangeProjectSettings(Editor.ProjectSettings newsettings, string moddir, NewProjectOptions options)
@@ -376,7 +383,6 @@ namespace StudioCore
 
             Editor.AliasBank.ReloadAliases();
             ParamEditor.ParamBank.ReloadParams(newsettings, options);
-            TextEditor.FMGBank.ReloadFMGs();
             MsbEditor.MtdBank.ReloadMtds();
             _msbEditor.ReloadUniverse();
             _modelEditor.ReloadAssetBrowser();
@@ -384,8 +390,8 @@ namespace StudioCore
             //Resources loaded here should be moved to databanks
             _msbEditor.OnProjectChanged(_projectSettings);
             _modelEditor.OnProjectChanged(_projectSettings);
-            _paramEditor.OnProjectChanged(_projectSettings);
             _textEditor.OnProjectChanged(_projectSettings);
+            _paramEditor.OnProjectChanged(_projectSettings);
         }
 
         public void ApplyStyle()
@@ -565,19 +571,18 @@ namespace StudioCore
                     $@"Your project was successfully saved to {_assetLocator.GameModDirectory} for manual recovery. " +
                     "You must manually replace your projects with these recovery files should you wish to restore them. " +
                     "Given the program has crashed, these files may be corrupt and you should backup your last good saved " +
-                    "files before attempting to use these.", 
+                    "files before attempting to use these.",
                     "Saved recovery",
                     System.Windows.Forms.MessageBoxButtons.OK,
                     System.Windows.Forms.MessageBoxIcon.Warning);
             }
         }
-        
+
         private void SaveFocusedEditor()
         {
             if (_projectSettings != null && _projectSettings.ProjectName != null)
             {
                 _projectSettings.Serialize(CFG.Current.LastProjectFile); //Danger zone assuming on lastProjectFile
-                SaveParamStudioConfig();
                 if (_msbEditorFocused)
                 {
                     _msbEditor.Save();
@@ -603,14 +608,9 @@ namespace StudioCore
             ImguiRenderer.Update(deltaseconds, InputTracker.FrameSnapshot);
             Tracy.TracyCZoneEnd(ctx);
             List<string> tasks = Editor.TaskManager.GetLiveThreads();
-            //_window.Title = tasks.Count == 0 ? "Dark Souls Param Studio " + _version : String.Join(", ", tasks);
+            Editor.TaskManager.ThrowTaskExceptions();
 
-            var command = EditorCommandQueue.GetNextCommand();
-            string[] commandsplit = null;
-            if (command != null)
-            {
-                commandsplit = command.Split($@"/");
-            }
+            string[] commandsplit = EditorCommandQueue.GetNextCommand();
             if (commandsplit != null && commandsplit[0] == "windowFocus")
             {
                 //this is a hack, cannot grab focus except for when un-minimising
@@ -728,7 +728,6 @@ namespace StudioCore
                         _modelEditor.SaveAll();
                         _paramEditor.SaveAll();
                         _textEditor.SaveAll();
-                        SaveParamStudioConfig();
                     }
                     if (Resource.FlverResource.CaptureMaterialLayouts && ImGui.MenuItem("Dump Flver Layouts (Debug)", ""))
                     {
@@ -814,9 +813,11 @@ namespace StudioCore
                         }
                         ImGui.EndMenu();
                     }
-                    if (ImGui.MenuItem("Enable Texturing (alpha)", "", CFG.Current.EnableTexturing))
+                    if (ImGui.BeginMenu("Map Editor"))
                     {
-                        CFG.Current.EnableTexturing = !CFG.Current.EnableTexturing;
+                        ImGui.Checkbox("Pin loaded maps to top of list", ref CFG.Current.Map_PinLoadedMaps);
+                        ImGui.Checkbox("Exclude loaded maps from search filter", ref CFG.Current.Map_AlwaysListLoadedMaps);
+                        ImGui.EndMenu();
                     }
                     if (ImGui.BeginMenu("Viewport Settings"))
                     {
@@ -859,23 +860,65 @@ namespace StudioCore
                         }
                         ImGui.EndMenu();
                     }
+                    if (ImGui.BeginMenu("Soapstone Server"))
+                    {
+                        string running = SoapstoneServer.GetRunningPort() is int port ? $"running on port {port}" : "not running";
+                        ImGui.Text($"The server is {running}.\nIt is not accessible over the network, only to other programs on this computer.\nPlease restart the program for changes to take effect.");
+                        ImGui.Separator();
+                        if (ImGui.MenuItem("Enable Cross-Editor Features", "", CFG.Current.EnableSoapstone))
+                        {
+                            CFG.Current.EnableSoapstone = !CFG.Current.EnableSoapstone;
+                        }
+                        ImGui.EndMenu();
+                    }
+                    if (ImGui.MenuItem("Enable Texturing (alpha)", "", CFG.Current.EnableTexturing))
+                    {
+                        CFG.Current.EnableTexturing = !CFG.Current.EnableTexturing;
+                    }
+                    if (ImGui.MenuItem("Show Original FMG Names", "", CFG.Current.FMG_ShowOriginalNames))
+                    {
+                        CFG.Current.FMG_ShowOriginalNames = !CFG.Current.FMG_ShowOriginalNames;
+                    }
+
+                    if (ImGui.Button("Open Config Folder"))
+                    {
+                        if (File.Exists(CFG.GetConfigFilePath()))
+                        {
+                            // Open folder in Windows Explorer
+                            Process.Start(@"explorer.exe", CFG.GetConfigFolderPath());
+                        }
+                    }
                     ImGui.EndMenu();
                 }
                 if (ImGui.BeginMenu("Help"))
                 {
+                    if (ImGui.BeginMenu("About"))
+                    {
+                        ImGui.Text("Original Author:\n" +
+                                   "Katalash\n\n" +
+                                   "Core Development Team:\n" +
+                                   "Katalash\n" +
+                                   "Philiquaz\n" +
+                                   "King bore haha (george)\n\n" +
+                                   "Additional Contributors:\n" +
+                                   "Thefifthmatt\n" +
+                                   "Shadowth117\n\n" +
+                                   "Special Thanks:\n" +
+                                   "TKGP\n" +
+                                   "Meowmaritus\n" +
+                                   "Vawser");
+                        ImGui.EndMenu();
+                    }
+                    
                     if (ImGui.BeginMenu("How to use"))
                     {
                         ImGui.Text("Usage of many features is assisted through the symbol (?).\nIn many cases, right clicking items will provide further information and options.");
                         ImGui.EndMenu();
                     }
+                    
                     if (ImGui.BeginMenu("Camera Controls"))
                     {
                         ImGui.Text("Holding click on the viewport will enable camera controls.\nUse WASD to navigate.\nUse right click to rotate the camera.\nHold Shift to temporarily speed up and Ctrl to temporarily slow down.\nScroll the mouse wheel to adjust overall speed.");
-                        ImGui.EndMenu();
-                    }
-                    if (ImGui.BeginMenu("About"))
-                    {
-                        ImGui.Text("Original Author:\nKatalash\n\nMaintainers:\nKatalash\nPhiliquaz\nKing bore haha (george)");
                         ImGui.EndMenu();
                     }
 
@@ -923,7 +966,7 @@ namespace StudioCore
                     */
                     ImGui.EndMenu();
                 }
-                if (FeatureFlags.MBSE_Test)
+                if (FeatureFlags.TestMenu)
                 {
                     if (ImGui.BeginMenu("Tests"))
                     {
@@ -935,6 +978,10 @@ namespace StudioCore
                         if (ImGui.MenuItem("MSBE read/write test"))
                         {
                             Tests.MSBReadWrite.Run(_assetLocator);
+                        }
+                        if (ImGui.MenuItem("BTL read/write test"))
+                        {
+                            Tests.BTLReadWrite.Run(_assetLocator);
                         }
                         ImGui.EndMenu();
                     }
