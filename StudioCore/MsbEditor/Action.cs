@@ -380,15 +380,18 @@ namespace StudioCore.MsbEditor
         private bool SetSelection;
         private int XWidth = 0;
         private int YHeight = 0;
+        private int ZDepth = 0;
         private int XIdOffset = 0;
         private int YIdOffset = 0;
+        private int ZIdOffset = 0;
         private float XPosOffset = 0;
         private float YPosOffset = 0;
+        private float ZPosOffset = 0;
 
 
         private static Regex TrailIDRegex = new Regex(@"_(?<id>\d+)$");
 
-        public GenerateGridObjectsAction(Universe univ, Scene.RenderScene scene, List<MapEntity> objects, bool setSelection, int XWidth, int YHeight, int XIdOffset, int YIdOffset, float XPosOffset, float YPosOffset)
+        public GenerateGridObjectsAction(Universe univ, Scene.RenderScene scene, List<MapEntity> objects, bool setSelection, int XWidth, int YHeight, int ZDepth, int XIdOffset, int YIdOffset, int ZIdOffset, float XPosOffset, float YPosOffset, float ZPosOffset)
         {
             Universe = univ;
             Scene = scene;
@@ -396,19 +399,21 @@ namespace StudioCore.MsbEditor
             SetSelection = setSelection;
             this.XWidth = XWidth;
             this.YHeight = YHeight;
+            this.ZDepth = ZDepth;
             this.XIdOffset = XIdOffset;
             this.YIdOffset = YIdOffset;
+            this.ZIdOffset = ZIdOffset;
             this.XPosOffset = XPosOffset;
             this.YPosOffset = YPosOffset;
+            this.ZPosOffset = ZPosOffset;
         }
 
         public override ActionEvent Execute()
         {
             bool clonesCached = Clones.Count() > 0;
-            // foreach (var obj in Clonables)
-            if (XWidth != 0 && YHeight != 0 && XIdOffset != 0 && YIdOffset != 0 && XPosOffset != 0 && YPosOffset != 0)
+            var objectnames = new Dictionary<string, HashSet<string>>();
+            for (int z = 0; z < ZDepth; z++)
             {
-                var objectnames = new Dictionary<string, HashSet<string>>();
                 for (int y = 0; y < YHeight; y++)
                 {
                     for (int x = 0; x < XWidth; x++)
@@ -450,11 +455,11 @@ namespace StudioCore.MsbEditor
 
                                     if(((MSBE.Part)newobj.WrappedObject).EntityID != 0 && ((MSBE.Part)newobj.WrappedObject).EntityID != -1)
                                     {
-                                        ((MSBE.Part)newobj.WrappedObject).EntityID = ((MSBE.Part)newobj.WrappedObject).EntityID + (x * XIdOffset) + (y * YIdOffset);
+                                        ((MSBE.Part)newobj.WrappedObject).EntityID = ((MSBE.Part)newobj.WrappedObject).EntityID + (x * XIdOffset) + (y * YIdOffset) + (z * ZIdOffset);
                                     }
                                     ((MSBE.Part)newobj.WrappedObject).Position = new System.Numerics.Vector3(
                                         ((MSBE.Part)newobj.WrappedObject).Position.X + (x * XPosOffset),
-                                        ((MSBE.Part)newobj.WrappedObject).Position.Y,
+                                        ((MSBE.Part)newobj.WrappedObject).Position.Y + (z * ZPosOffset),
                                         ((MSBE.Part)newobj.WrappedObject).Position.Z + (y * YPosOffset)
                                     );
                                 }

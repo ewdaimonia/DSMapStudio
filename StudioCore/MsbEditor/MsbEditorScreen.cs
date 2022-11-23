@@ -48,10 +48,13 @@ namespace StudioCore.MsbEditor
         private int DupIncrement = 0;
         private int XWidth = 0;
         private int YHeight = 0;
+        private int ZDepth = 0;
         private int XIdOffset = 0;
         private int YIdOffset = 0;
+        private int ZIdOffset = 0;
         private float XPosOffset = 0;
         private float YPosOffset = 0;
+        private float ZPosOffset = 0;
 
         private static object _lock_PauseUpdate = new object();
         private bool _PauseUpdate;
@@ -305,13 +308,17 @@ namespace StudioCore.MsbEditor
                     var action = new CloneMapObjectsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, DupIncrement);
                     EditorActionManager.ExecuteAction(action);
                 }
-                if (ImGui.InputInt("Columns", ref XWidth, 1, 10))
+                if (ImGui.InputInt("XColumns", ref XWidth, 1, 10))
                 {
                     this.XWidth = XWidth;
                 }
-                if (ImGui.InputInt("Rows", ref YHeight, 1, 10))
+                if (ImGui.InputInt("YRows", ref YHeight, 1, 10))
                 {
                     this.YHeight = YHeight;
+                }
+                if (ImGui.InputInt("ZLevels", ref ZDepth, 1, 10))
+                {
+                    this.ZDepth = ZDepth;
                 }
                 if (ImGui.InputInt("XIdOffset", ref XIdOffset, 1, 10))
                 {
@@ -321,6 +328,10 @@ namespace StudioCore.MsbEditor
                 {
                     this.YIdOffset = YIdOffset;
                 }
+                if (ImGui.InputInt("ZIdOffset", ref ZIdOffset, 1, 10))
+                {
+                    this.ZIdOffset = ZIdOffset;
+                }
                 if (ImGui.InputFloat("XPosOffset", ref XPosOffset))
                 {
                     this.XPosOffset = XPosOffset;
@@ -329,9 +340,13 @@ namespace StudioCore.MsbEditor
                 {
                     this.YPosOffset = YPosOffset;
                 }
+                if (ImGui.InputFloat("ZPosOffset", ref ZPosOffset))
+                {
+                    this.ZPosOffset = ZPosOffset;
+                }
                 if (ImGui.MenuItem("Generate Grid Dungeon", "Ctrl+J", false, _selection.IsSelection()))
                 {
-                    var action = new GenerateGridObjectsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, XWidth, YHeight, XIdOffset, YIdOffset, XPosOffset, YPosOffset);
+                    var action = new GenerateGridObjectsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, XWidth, YHeight, ZDepth, XIdOffset, YIdOffset, ZIdOffset, XPosOffset, YPosOffset, ZPosOffset);
                     EditorActionManager.ExecuteAction(action);
                 }
 
