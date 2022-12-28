@@ -4,6 +4,7 @@ using System.Text;
 using System.Numerics;
 using Veldrid;
 using ImGuiNET;
+using System.Reflection;
 
 namespace StudioCore.MsbEditor
 {
@@ -11,15 +12,19 @@ namespace StudioCore.MsbEditor
     {
         private Scene.RenderScene _scene;
         private Selection _selection;
+        private ActionManager _actionManager;
 
-        public DisplayGroupsEditor(Scene.RenderScene scene, Selection sel)
+        public DisplayGroupsEditor(Scene.RenderScene scene, Selection sel, ActionManager manager)
         {
             _scene = scene;
             _selection = sel;
+            _actionManager = manager;
         }
 
         public void OnGui(int dispCount)
         {
+            float scale = ImGuiRenderer.GetUIScale();
+
             uint[] sdrawgroups = null;
             uint[] sdispgroups = null;
             var sel = _selection.GetSingleFilteredSelection<Entity>();
@@ -27,17 +32,20 @@ namespace StudioCore.MsbEditor
             {
                 if (sel.UseDrawGroups)
                 {
-                    sdrawgroups = sel.Drawgroups; //Will be CollisionName values (if reference is valid)
+                    sdrawgroups = sel.Drawgroups; // Will be CollisionName values (if reference is valid)
                 }
                 sdispgroups = sel.Dispgroups;
-                //sdispgroups = sel.FakeDispgroups;
             }
 
 
-            ImGui.SetNextWindowSize(new Vector2(100, 100));
+            ImGui.SetNextWindowSize(new Vector2(100, 100) * scale);
 
-            if (InputTracker.GetControlShortcut(Key.R)
-            || InputTracker.GetControlShortcut(Key.G))
+            if (InputTracker.GetKeyDown(KeyBindings.Current.Map_RenderGroup_GetDisp)
+            || InputTracker.GetKeyDown(KeyBindings.Current.Map_RenderGroup_GetDraw)
+            || InputTracker.GetKeyDown(KeyBindings.Current.Map_RenderGroup_GiveDisp)
+            || InputTracker.GetKeyDown(KeyBindings.Current.Map_RenderGroup_GiveDraw)
+            || InputTracker.GetKeyDown(KeyBindings.Current.Map_RenderGroup_ShowAll)
+            || InputTracker.GetKeyDown(KeyBindings.Current.Map_RenderGroup_HideAll))
             {
                 ImGui.SetNextWindowFocus();
             }
@@ -56,7 +64,8 @@ namespace StudioCore.MsbEditor
                     dg.AlwaysVisible = false;
                 }
 
-                if (ImGui.Button("Show All <Ctrl+R>") || InputTracker.GetControlShortcut(Key.R))
+                if (ImGui.Button($"Show All <{KeyBindings.Current.Map_RenderGroup_ShowAll.HintText}>")
+                    || InputTracker.GetKeyDown(KeyBindings.Current.Map_RenderGroup_ShowAll))
                 {
                     for (int i = 0; i < dispCount; i++)
                     {
@@ -65,7 +74,8 @@ namespace StudioCore.MsbEditor
                 }
 
                 ImGui.SameLine();
-                if (ImGui.Button("Hide All"))
+                if (ImGui.Button($"Hide All <{KeyBindings.Current.Map_RenderGroup_HideAll.HintText}>")
+                    || InputTracker.GetKeyDown(KeyBindings.Current.Map_RenderGroup_HideAll))
                 {
                     for (int i = 0; i < dispCount; i++)
                     {
@@ -76,7 +86,9 @@ namespace StudioCore.MsbEditor
                 ImGui.SameLine(0, 14f);
                 if (sdispgroups == null)
                     ImGui.BeginDisabled();
-                if ((ImGui.Button("Get DispGroups <Ctrl+G>") || InputTracker.GetControlShortcut(Key.G)) && sdispgroups != null)
+                if (ImGui.Button($"Get DispGroups <{KeyBindings.Current.Map_RenderGroup_GetDisp.HintText}>")
+                    || InputTracker.GetKeyDown(KeyBindings.Current.Map_RenderGroup_GetDisp)
+                    && sdispgroups != null)
                 {
                     for (int i = 0; i < dispCount; i++)
                     {
@@ -85,7 +97,9 @@ namespace StudioCore.MsbEditor
                 }
 
                 ImGui.SameLine();
-                if (ImGui.Button("Get DrawGroups"))
+                if (ImGui.Button($"Get DrawGroups <{KeyBindings.Current.Map_RenderGroup_GetDraw.HintText}>")
+                    || InputTracker.GetKeyDown(KeyBindings.Current.Map_RenderGroup_GetDraw)
+                    && sdispgroups != null)
                 {
                     for (int i = 0; i < dispCount; i++)
                     {
@@ -94,22 +108,23 @@ namespace StudioCore.MsbEditor
                 }
 
                 ImGui.SameLine(0, 14f);
-                if (ImGui.Button("Give as DrawGroups"))
+                if (ImGui.Button($"Give as DrawGroups <{KeyBindings.Current.Map_RenderGroup_GiveDraw.HintText}>")
+                    || InputTracker.GetKeyDown(KeyBindings.Current.Map_RenderGroup_GiveDraw)
+                    && sdispgroups != null)
                 {
-                    for (int i = 0; i < dispCount; i++)
-                    {
-                        sel.Drawgroups[i] = dg.RenderGroups[i];
-                    }
+                    ArrayPropertyCopyAction action = new(dg.RenderGroups, sel.Drawgroups);
+                    _actionManager.ExecuteAction(action);
                 }
 
                 ImGui.SameLine();
-                if (ImGui.Button("Give as DispGroups"))
+                if (ImGui.Button($"Give as DispGroups <{KeyBindings.Current.Map_RenderGroup_GiveDisp.HintText}>")
+                    || InputTracker.GetKeyDown(KeyBindings.Current.Map_RenderGroup_GiveDisp)
+                    && sdispgroups != null)
                 {
-                    for (int i = 0; i < dispCount; i++)
-                    {
-                        sel.Dispgroups[i] = dg.RenderGroups[i];
-                    }
+                    ArrayPropertyCopyAction action = new(dg.RenderGroups, sel.Dispgroups);
+                    _actionManager.ExecuteAction(action);
                 }
+
                 if (sdispgroups == null)
                     ImGui.EndDisabled();
 

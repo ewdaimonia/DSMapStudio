@@ -48,7 +48,14 @@ namespace StudioCore.TextEditor
             public FmgUICategory UICategory;
             public FmgEntryCategory EntryCategory;
             public FmgEntryTextType EntryType;
-            public bool GroupedEntry = false;
+
+            public void AddParent(FMGInfo parent)
+            {
+                if (CFG.Current.FMG_NoFmgPatching)
+                    return;
+                PatchParent = parent;
+                parent.PatchChildren.Add(this);
+            }
 
             /// <summary>
             /// Returns a patched list of Entry & FMGInfo value pairs from this FMGInfo and its children.
@@ -68,7 +75,7 @@ namespace StudioCore.TextEditor
                 }
 
                 // Check and apply patch entries
-                foreach (var child in PatchChildren)
+                foreach (var child in PatchChildren.OrderBy(e => (int)e.FmgID))
                 {
                     foreach (var entry in child.Fmg.Entries)
                     {
@@ -108,7 +115,7 @@ namespace StudioCore.TextEditor
                 list.AddRange(Fmg.Entries);
 
                 // Check and apply patch entries
-                foreach (var child in PatchChildren)
+                foreach (var child in PatchChildren.OrderBy(e => (int)e.FmgID))
                 {
                     foreach (var entry in child.Fmg.Entries)
                     {
@@ -135,38 +142,18 @@ namespace StudioCore.TextEditor
             /// <summary>
             /// Adds an entry to the end of the FMG.
             /// </summary>
-            public void AddEntry(FMG.Entry entry, bool sort = true)
+            public void AddEntry(FMG.Entry entry)
             {
                 Fmg.Entries.Add(entry);
-                if (sort)
-                    Fmg.Entries.Sort();
             }
 
             /// <summary>
-            /// Inserts an entry into FMG at the specified index.
+            /// Clones an FMG entry.
             /// </summary>
-            public void InsertEntry(int index, FMG.Entry newEntry)
-            {
-                Fmg.Entries.Insert(index, newEntry);
-            }
-
-            /// <summary>
-            /// Copies an entry within the FMG.
-            /// If desired, it will also get and set the next unused entry ID.
-            /// </summary>
-            /// <param name="getUnusedID">If true, get next unused ID and set entry ID to it</param>
-            /// <returns>The new entry</returns>
-            public FMG.Entry CopyEntry(FMG.Entry entry, bool getUnusedID = false)
+            /// <returns>Cloned entry</returns>
+            public FMG.Entry CloneEntry(FMG.Entry entry)
             {
                 FMG.Entry newEntry = new(entry.ID, entry.Text);
-                if (getUnusedID)
-                {
-                    do
-                    {
-                        newEntry.ID++;
-                    }
-                    while (Fmg.Entries.Find(e => e.ID == newEntry.ID) != null);
-                }
                 return newEntry;
             }
 
@@ -267,25 +254,25 @@ namespace StudioCore.TextEditor
             }
 
             /// <summary>
-            /// Inserts all entries into their assigned FMGs.
+            /// Places all entries within this EntryGroup into their assigned FMGs.
             /// </summary>
-            public void InsertEntries(int index)
+            public void ImplementEntryGroup()
             {
                 if (TextBody != null)
                 {
-                    TextBodyInfo.InsertEntry(index, TextBody);
+                    TextBodyInfo.AddEntry(TextBody);
                 }
                 if (Title != null)
                 {
-                    TitleInfo.InsertEntry(index, Title);
+                    TitleInfo.AddEntry(Title);
                 }
                 if (Summary != null)
                 {
-                    SummaryInfo.InsertEntry(index, Summary);
+                    SummaryInfo.AddEntry(Summary);
                 }
                 if (Description != null)
                 {
-                    DescriptionInfo.InsertEntry(index, Description);
+                    DescriptionInfo.AddEntry(Description);
                 }
             }
 
@@ -293,69 +280,64 @@ namespace StudioCore.TextEditor
             /// Duplicates all entries within their assigned FMGs.
             /// New entries are inserted into their assigned FMGs.
             /// </summary>
-            /// <returns>The new EntryGroup</returns>
-            public EntryGroup DuplicateEntries()
+            /// <returns>New EntryGroup.</returns>
+            public EntryGroup DuplicateFMGEntries()
             {
-                var index = GetIndex();
-                if (index == -1)
-                {
-                    throw new Exception($"Could not find EntryGroup entries in assigned FMGs. {this}");
-                }
                 EntryGroup newGroup = new();
                 if (TextBody != null)
                 {
                     newGroup.TextBodyInfo = TextBodyInfo;
-                    newGroup.TextBody = TextBodyInfo.CopyEntry(TextBody);
-                    TextBodyInfo.InsertEntry(index, newGroup.TextBody);
+                    newGroup.TextBody = TextBodyInfo.CloneEntry(TextBody);
+                    TextBodyInfo.AddEntry(newGroup.TextBody);
                 }
                 if (Title != null)
                 {
                     newGroup.TitleInfo = TitleInfo;
-                    newGroup.Title = TitleInfo.CopyEntry(Title);
-                    TitleInfo.InsertEntry(index, newGroup.Title);
+                    newGroup.Title = TitleInfo.CloneEntry(Title);
+                    TitleInfo.AddEntry(newGroup.Title);
                 }
                 if (Summary != null)
                 {
                     newGroup.SummaryInfo = SummaryInfo;
-                    newGroup.Summary = SummaryInfo.CopyEntry(Summary);
-                    SummaryInfo.InsertEntry(index, newGroup.Summary);
+                    newGroup.Summary = SummaryInfo.CloneEntry(Summary);
+                    SummaryInfo.AddEntry(newGroup.Summary);
                 }
                 if (Description != null)
                 {
                     newGroup.DescriptionInfo = DescriptionInfo;
-                    newGroup.Description = DescriptionInfo.CopyEntry(Description);
-                    DescriptionInfo.InsertEntry(index, newGroup.Description);
+                    newGroup.Description = DescriptionInfo.CloneEntry(Description);
+                    DescriptionInfo.AddEntry(newGroup.Description);
                 }
                 newGroup.ID = ID;
                 return newGroup;
             }
 
             /// <summary>
-            /// Copies EntryGroup and returns 
+            /// Clones this EntryGroup and returns a duplicate.
             /// </summary>
-            /// <returns>The new EntryGroup</returns>
-            public EntryGroup CopyEntryGroup()
+            /// <returns>Cloned EntryGroup.</returns>
+            public EntryGroup CloneEntryGroup()
             {
                 EntryGroup newGroup = new();
                 if (TextBody != null)
                 {
                     newGroup.TextBodyInfo = TextBodyInfo;
-                    newGroup.TextBody = TextBodyInfo.CopyEntry(TextBody);
+                    newGroup.TextBody = TextBodyInfo.CloneEntry(TextBody);
                 }
                 if (Title != null)
                 {
                     newGroup.TitleInfo = TitleInfo;
-                    newGroup.Title = TitleInfo.CopyEntry(Title);
+                    newGroup.Title = TitleInfo.CloneEntry(Title);
                 }
                 if (Summary != null)
                 {
                     newGroup.SummaryInfo = SummaryInfo;
-                    newGroup.Summary = SummaryInfo.CopyEntry(Summary);
+                    newGroup.Summary = SummaryInfo.CloneEntry(Summary);
                 }
                 if (Description != null)
                 {
                     newGroup.DescriptionInfo = DescriptionInfo;
-                    newGroup.Description = DescriptionInfo.CopyEntry(Description);
+                    newGroup.Description = DescriptionInfo.CloneEntry(Description);
                 }
                 return newGroup;
             }
@@ -381,31 +363,6 @@ namespace StudioCore.TextEditor
                 {
                     DescriptionInfo.DeleteEntry(Description);
                 }
-            }
-
-            /// <summary>
-            /// Finds shared index of entries in FMGs.
-            /// </summary>
-            /// <returns>The zero-based index if found; otherwise -1.</returns>
-            public int GetIndex()
-            {
-                if (TextBody != null)
-                {
-                    return TextBodyInfo.Fmg.Entries.FindIndex(e => e.ID == TextBody.ID);
-                }
-                else if (Title != null)
-                {
-                    return TitleInfo.Fmg.Entries.FindIndex(e => e.ID == Title.ID);
-                }
-                else if (Summary != null)
-                {
-                    return SummaryInfo.Fmg.Entries.FindIndex(e => e.ID == Summary.ID);
-                }
-                else if (Description != null)
-                {
-                    return DescriptionInfo.Fmg.Entries.FindIndex(e => e.ID == Description.ID);
-                }
-                return -1;
             }
         }
 
@@ -442,6 +399,7 @@ namespace StudioCore.TextEditor
             Title = 1,
             Summary = 2,
             Description = 3,
+            ExtraInfo = 4,
         }
 
         /// <summary>
@@ -449,7 +407,7 @@ namespace StudioCore.TextEditor
         /// </summary>
         public enum FmgEntryCategory
         {
-            None,
+            None = -1,
             Goods,
             Weapons,
             Armor,
@@ -461,6 +419,7 @@ namespace StudioCore.TextEditor
             Message,
             SwordArts,
             Effect,
+            ActionButtonText,
         }
 
         /// <summary>
@@ -509,9 +468,9 @@ namespace StudioCore.TextEditor
             Event_Patch = 101,
             MenuDialog_Patch = 102,
             Win32Messages_Patch = 103,
-            NpcDialog_Patch = 104,
-            BloodMessage_Patch = 107,
-            MenuOneLine_Patch = 121,
+            TalkMsg_Patch = 104,
+            BloodMsg_Patch = 107,
+            MenuLineHelp_Patch = 121,
             MenuKeyGuide_Patch = 122,
             MenuOther_Patch = 123,
             MenuCommon_Patch = 124,
@@ -553,13 +512,13 @@ namespace StudioCore.TextEditor
             Modern_MenuText = 200,
             Modern_LineHelp = 201,
             Modern_KeyGuide = 202,
-            Modern_System_Message_win64 = 203,
+            Modern_SystemMessage_win64 = 203,
             Modern_Dialogues = 204,
             TalkMsg_DLC1 = 230,
             Event_DLC1 = 231,
             Modern_MenuText_DLC1 = 232,
             Modern_LineHelp_DLC1 = 233,
-            Modern_System_Message_win64_DLC1 = 235,
+            Modern_SystemMessage_win64_DLC1 = 235,
             Modern_Dialogues_DLC1 = 236,
             SystemMessage_PS4_DLC1 = 237,
             SystemMessage_XboxOne_DLC1 = 238,
@@ -586,7 +545,7 @@ namespace StudioCore.TextEditor
             Event_DLC2 = 271,
             Modern_MenuText_DLC2 = 272,
             Modern_LineHelp_DLC2 = 273,
-            Modern_System_Message_win64_DLC2 = 275,
+            Modern_SystemMessage_win64_DLC2 = 275,
             Modern_Dialogues_DLC2 = 276,
             SystemMessage_PS4_DLC2 = 277,
             SystemMessage_XboxOne_DLC2 = 278,
@@ -608,25 +567,31 @@ namespace StudioCore.TextEditor
             //
             TalkMsg_FemalePC_Alt = 4,
             NetworkMessage = 31,
-            ActionButtonText = 32,
             EventTextForTalk = 33,
             EventTextForMap = 34,
             TutorialTitle = 207,
             TutorialBody = 208,
             TextEmbedImageName_win64 = 209,
 
-            // Multiple use cases
+            // Multiple use cases. Differences are applied in ApplyGameDifferences();
+            ReusedFMG_32 = 32,
+            // FMG 32
+            // BB:  GemExtraInfo
+            // DS3: ActionButtonText
+            // SDT: ActionButtonText
+            // ER:  ActionButtonText
             ReusedFMG_210 = 210,
-            // 210
+            // FMG 210
             // DS3: TitleGoods_DLC1
+            // SDT: ?
             // ER:  ToS_win64
             ReusedFMG_205 = 205,
-            // 205
+            // FMG 205
             // DS3: SystemMessage_PS4
             // SDT: TutorialText
             // ER:  LoadingTitle
             ReusedFMG_206 = 206,
-            // 206
+            // FMG 206
             // DS3: SystemMessage_XboxOne 
             // SDT: TutorialTitle
             // ER:  LoadingText
@@ -655,7 +620,6 @@ namespace StudioCore.TextEditor
                 case FmgIDType.SummaryGoods_DLC2:
                 case FmgIDType.TitleGoods:
                 case FmgIDType.TitleGoods_Patch:
-                case FmgIDType.ReusedFMG_210:
                 case FmgIDType.TitleGoods_DLC2:
                     return FmgEntryCategory.Goods;
 
@@ -790,7 +754,6 @@ namespace StudioCore.TextEditor
                     return FmgEntryTextType.Summary;
 
                 case FmgIDType.TitleGoods:
-                case FmgIDType.ReusedFMG_210:
                 case FmgIDType.TitleGoods_DLC2:
                 case FmgIDType.TitleWeapons:
                 case FmgIDType.TitleWeapons_DLC1:
@@ -835,70 +798,8 @@ namespace StudioCore.TextEditor
             }
         }
 
-        /*
         /// <summary>
-        /// Checks if FMG is a patch FMG
-        /// </summary>
-        public static bool IsPatchFMG(FMGInfo info)
-        {
-            switch (info.FmgID)
-            {
-                case FmgIDType.ReusedFMG_210: // Changes per-game. Handled elsewhere.
-                    return false;
-                case FmgIDType.TitleGoods_Patch:
-                case FmgIDType.DescriptionGoods_Patch:
-                case FmgIDType.DescriptionGoods_DLC1:
-                case FmgIDType.DescriptionGoods_DLC2:
-                case FmgIDType.SummaryGoods_Patch:
-                case FmgIDType.SummaryGoods_DLC1:
-                case FmgIDType.SummaryGoods_DLC2:
-                case FmgIDType.TitleGoods:
-                case FmgIDType.TitleGoods_DLC2:
-                case FmgIDType.DescriptionWeapons_DLC1:
-                case FmgIDType.DescriptionWeapons_DLC2:
-                case FmgIDType.TitleWeapons_DLC1:
-                case FmgIDType.TitleWeapons_DLC2:
-                case FmgIDType.DescriptionWeapons_Patch:
-                case FmgIDType.SummaryWeapons_Patch:
-                case FmgIDType.TitleWeapons_Patch:
-                case FmgIDType.DescriptionArmor_DLC1:
-                case FmgIDType.DescriptionArmor_DLC2:
-                case FmgIDType.TitleArmor_DLC1:
-                case FmgIDType.TitleArmor_DLC2:
-                case FmgIDType.DescriptionArmor_Patch:
-                case FmgIDType.SummaryArmor_Patch:
-                case FmgIDType.TitleArmor_Patch:
-                case FmgIDType.DescriptionRings_DLC1:
-                case FmgIDType.DescriptionRings_DLC2:
-                case FmgIDType.SummaryRings_DLC1:
-                case FmgIDType.SummaryRings_DLC2:
-                case FmgIDType.TitleRings_DLC1:
-                case FmgIDType.TitleRings_DLC2:
-                case FmgIDType.DescriptionRings_Patch:
-                case FmgIDType.SummaryRings_Patch:
-                case FmgIDType.TitleRings_Patch:
-                case FmgIDType.DescriptionSpells_DLC1:
-                case FmgIDType.DescriptionSpells_DLC2:
-                case FmgIDType.SummarySpells_DLC1:
-                case FmgIDType.SummarySpells_DLC2:
-                case FmgIDType.TitleSpells_DLC1:
-                case FmgIDType.TitleSpells_DLC2:
-                case FmgIDType.DescriptionSpells_Patch:
-                case FmgIDType.TitleSpells_Patch:
-                case FmgIDType.TitleCharacters_DLC1:
-                case FmgIDType.TitleCharacters_DLC2:
-                case FmgIDType.TitleCharacters_Patch:
-                case FmgIDType.TitleLocations_DLC1:
-                case FmgIDType.TitleLocations_DLC2:
-                case FmgIDType.TitleLocations_Patch:
-                    return true;
-            }
-            return false;
-        }
-        */
-
-        /// <summary>
-        /// Dumb little list for comparing FMG type enum strings for patch FMGs
+        /// List of strings to compare with "FmgIDType" name to identify patch FMGs.
         /// </summary>
         private readonly static List<string> patchStrings = new()
         {
@@ -941,24 +842,12 @@ namespace StudioCore.TextEditor
                 case FmgEntryCategory.Gem:
                 case FmgEntryCategory.SwordArts:
                     info.UICategory = FmgUICategory.Item;
-                    info.GroupedEntry = true;
                     break;
                 default:
                     info.UICategory = FmgUICategory.Menu;
                     break;
             }
 
-            foreach (var parentInfo in _fmgInfoBank)
-            {
-                if (parentInfo.Name == RemovePatchStrings(info.FmgID.ToString()))
-                {
-                    // Patch FMG found
-                    info.PatchParent = parentInfo;
-                    parentInfo.PatchChildren.Add(info);
-                }
-            }
-
-            ApplyGameDifferences(info);
             ActiveUITypes[info.UICategory] = true;
 
             return info;
@@ -984,22 +873,61 @@ namespace StudioCore.TextEditor
         }
 
         /// <summary>
-        /// Loads MSGbnd from path, generates FMGInfo, and fills FmgInfoBank.
+        /// Loads item and menu MsgBnds from paths, generates FMGInfo, and fills FmgInfoBank.
+        /// </summary>
+        /// <returns>True if successful; false otherwise.</returns>
+        private static bool LoadItemMenuMsgBnds(AssetDescription itemMsgPath, AssetDescription menuMsgPath)
+        {
+            if (!LoadMsgBnd(itemMsgPath.AssetPath, "item.msgbnd")
+                || !LoadMsgBnd(menuMsgPath.AssetPath, "menu.msgbnd"))
+            {
+                return false;
+            }
+
+            foreach (var info in _fmgInfoBank)
+            {
+                ApplyGameDifferences(info);
+                if (CFG.Current.FMG_NoGroupedFmgEntries)
+                {
+                    info.EntryType = FmgEntryTextType.TextBody;
+                }
+            }
+            if (!CFG.Current.FMG_NoFmgPatching)
+            {
+                foreach (var info in _fmgInfoBank)
+                {
+                    SetFMGInfoPatchParent(info);
+                }
+            }
+
+            if (CFG.Current.FMG_NoGroupedFmgEntries)
+                _fmgInfoBank = _fmgInfoBank.OrderBy(e => e.EntryCategory).ThenBy(e => e.FmgID).ToList();
+            else
+                _fmgInfoBank = _fmgInfoBank.OrderBy(e => e.Name).ToList();
+
+            HandleDuplicateEntries();
+
+            return true;
+        }
+
+        /// <summary>
+        /// Loads MsgBnd from path, generates FMGInfo, and fills FmgInfoBank.
         /// </summary>
         /// <returns>True if successful; false otherwise.</returns>
         private static bool LoadMsgBnd(string path, string msgBndType = "UNDEFINED")
         {
             if (path == null)
             {
-                if (_languageFolder == "")
+                if (_languageFolder != "")
                 {
-                    // Default language folder could not be found.
+                    TaskManager.warningList.TryAdd("FmgPathLoadError" + msgBndType + _languageFolder,
+                        $"Could not find text data files when looking for [{msgBndType}] in [{_languageFolder}] folder.\nText data will not be loaded.");
                 }
                 else
                 {
-                    MessageBox.Show($"Could not find {msgBndType} in language folder \"{_languageFolder}\".\nText data will not be loaded.", "Error");
+                    TaskManager.warningList.TryAdd("FmgDefaultPathLoadError" + msgBndType + _languageFolder,
+                        $"Could not find text data files when looking for [{msgBndType}] in [Default Eng] folder.\nText data will not be loaded. Make sure entire game is unpacked.");
                 }
-                
                 IsLoaded = false;
                 IsLoading = false;
                 return false;
@@ -1016,19 +944,19 @@ namespace StudioCore.TextEditor
             }
 
             foreach (var file in fmgBinder.Files)
-            {
                 _fmgInfoBank.Add(GenerateFMGInfo(file));
-            }
+
             return true;
         }
 
         public static void ReloadFMGs(string languageFolder = "")
         {
-            try
+            TaskManager.Run("FB:Reload", true, false, true, () =>
             {
-                _languageFolder = languageFolder;
                 IsLoaded = false;
                 IsLoading = true;
+
+                _languageFolder = languageFolder;
 
                 ActiveUITypes.Clear();
                 foreach (var e in Enum.GetValues(typeof(FmgUICategory)))
@@ -1036,26 +964,27 @@ namespace StudioCore.TextEditor
                     ActiveUITypes.Add((FmgUICategory)e, false);
                 }
 
-                //TaskManager.Run("FB:Reload", true, false, true, () =>
                 if (AssetLocator.Type == GameType.Undefined)
                 {
                     return;
                 }
-
                 if (AssetLocator.Type == GameType.DarkSoulsIISOTFS)
                 {
-                    ReloadDS2FMGs(ref _languageFolder);
-                    IsLoading = false;
-                    IsLoaded = true;
+                    if (ReloadDS2FMGs())
+                    {
+                        IsLoading = false;
+                        IsLoaded = true;
+                    }
                     return;
                 }
 
-                var itemMsgPath = AssetLocator.GetItemMsgbnd(ref _languageFolder);
-                var menuMsgPath = AssetLocator.GetMenuMsgbnd(ref _languageFolder);
+                SetDefaultLanguagePath();
+
+                AssetDescription itemMsgPath = AssetLocator.GetItemMsgbnd(_languageFolder);
+                AssetDescription menuMsgPath = AssetLocator.GetMenuMsgbnd(_languageFolder);
 
                 _fmgInfoBank.Clear();
-                if (!LoadMsgBnd(itemMsgPath.AssetPath, "item.msgbnd")
-                    || !LoadMsgBnd(menuMsgPath.AssetPath, "menu.msgbnd"))
+                if (!LoadItemMenuMsgBnds(itemMsgPath, menuMsgPath))
                 {
                     _fmgInfoBank.Clear();
                     IsLoaded = false;
@@ -1063,22 +992,33 @@ namespace StudioCore.TextEditor
                     return;
                 }
 
-                _fmgInfoBank = _fmgInfoBank.OrderBy(e => e.Name).ToList();
-                HandleDuplicateEntries();
                 IsLoaded = true;
                 IsLoading = false;
-            }
-            catch (Exception e) when (e is DirectoryNotFoundException or FileNotFoundException)
-            {
-                _fmgInfoBank.Clear();
-                IsLoaded = false;
-                IsLoading = false;
-            }
+            });
         }
 
-        private static void ReloadDS2FMGs(ref string languageFolder)
+        private static bool ReloadDS2FMGs()
         {
-            var desc = AssetLocator.GetItemMsgbnd(ref languageFolder, true);
+            SetDefaultLanguagePath();
+            AssetDescription desc = AssetLocator.GetItemMsgbnd(_languageFolder, true);
+
+            if (desc.AssetPath == null)
+            {
+                if (_languageFolder != "")
+                {
+                    TaskManager.warningList.TryAdd("FmgPathLoadError" + _languageFolder,
+                        $"Could not find text data files when using [{_languageFolder}] folder.\nText data will not be loaded.");
+                }
+                else
+                {
+                    TaskManager.warningList.TryAdd("FmgDefaultPathLoadError" + _languageFolder,
+                        $"Could not find text data files when using [Default Eng] folder.\nText data will not be loaded. Make sure entire game is unpacked.");
+                }
+                IsLoaded = false;
+                IsLoading = false;
+                return false;
+            }
+
             var files = Directory.GetFileSystemEntries($@"{AssetLocator.GameRootDirectory}\{desc.AssetPath}", @"*.fmg").ToList();
             _fmgInfoBank.Clear();
             foreach (var file in files)
@@ -1097,16 +1037,72 @@ namespace StudioCore.TextEditor
             }
             _fmgInfoBank = _fmgInfoBank.OrderBy(e => e.Name).ToList();
             HandleDuplicateEntries();
+            return true;
+        }
+
+        private static void SetDefaultLanguagePath()
+        {
+            if (_languageFolder == "")
+            {
+                // By default, try to find path to English folder.
+                foreach (var lang in AssetLocator.GetMsgLanguages())
+                {
+                    string folder = lang.Value.Split("\\").Last();
+                    if (folder.Contains("eng", StringComparison.CurrentCultureIgnoreCase))
+                    {
+                        _languageFolder = folder;
+                        break;
+                    }
+                }
+            }
+        }
+
+        private static void SetFMGInfoPatchParent(FMGInfo info)
+        {
+            string strippedName = RemovePatchStrings(info.Name);
+            if (strippedName != info.Name)
+            {
+                // This is a patch FMG, try to find parent FMG.
+                foreach (var parentInfo in _fmgInfoBank)
+                {
+                    if (parentInfo.Name == strippedName)
+                    {
+                        info.AddParent(parentInfo);
+                        return;
+                    }
+                }
+                TaskManager.warningList.TryAdd("FMGFindParentErr "+info.Name+" "+info.FmgID,
+                    $"Could not find a patch parent for FMG \"{info.Name}\" with ID {info.FmgID}");
+            }
         }
 
         /// <summary>
-        /// Checks for FMG info that differs per-game
+        /// Checks and applies FMG info that differs per-game.
         /// </summary>
         private static void ApplyGameDifferences(FMGInfo info)
         {
             var gameType = AssetLocator.Type;
             switch (info.FmgID)
             {
+                case FmgIDType.ReusedFMG_32:
+                    if (gameType == GameType.Bloodborne)
+                    {
+                        info.Name = "GemExtraInfo";
+                        info.UICategory = FmgUICategory.Item;
+                        info.EntryCategory = FmgEntryCategory.Gem;
+                        //info.EntryType = FmgEntryTextType.ExtraInfo; // TODO
+                    }
+                    else
+                    {
+                        info.Name = "ActionButtonText";
+                        info.EntryCategory = FmgEntryCategory.ActionButtonText;
+                    }
+                    break;
+                case FmgIDType.Event:
+                case FmgIDType.Event_Patch:
+                    if (gameType is GameType.DemonsSouls or GameType.DarkSoulsPTDE or GameType.DarkSoulsRemastered or GameType.Bloodborne)
+                        info.EntryCategory = FmgEntryCategory.ActionButtonText;
+                    break;
                 case FmgIDType.ReusedFMG_205:
                     if (gameType == GameType.EldenRing)
                         info.Name = "LoadingTitle";
@@ -1138,8 +1134,7 @@ namespace StudioCore.TextEditor
                         info.EntryType = FmgEntryTextType.Title;
                         info.EntryCategory = FmgEntryCategory.Goods;
                         var parent = _fmgInfoBank.Find(e => e.FmgID == FmgIDType.TitleGoods);
-                        info.PatchParent = parent;
-                        parent.PatchChildren.Add(info);
+                        info.AddParent(parent);
                     }
                     break;
             }
@@ -1147,33 +1142,49 @@ namespace StudioCore.TextEditor
         }
 
         /// <summary>
-        /// Get patched FMG Entries for the specified category and text type.
+        /// Get patched FMG Entries for the specified category, with TextType Title or TextBody.
         /// </summary>
-        /// <returns>List of entries if found; empty list otherwise.</returns>
-        public static List<FMG.Entry> GetFmgEntriesByType(FmgEntryCategory category, FmgEntryTextType textType, bool sort = true)
+        /// <param name="category">FMGEntryCategory. If "None", an empty list will be returned.</param>
+        /// <returns>List of patched entries if found; empty list otherwise.</returns>
+        public static List<FMG.Entry> GetFmgEntriesByCategory(FmgEntryCategory category, bool sort = true)
         {
+            if (category == FmgEntryCategory.None)
+                return new List<FMG.Entry>();
             foreach (var info in _fmgInfoBank)
             {
-                if (info.EntryCategory == category && info.EntryType == textType)
-                {
+                if (info.EntryCategory == category && info.EntryType is FmgEntryTextType.Title or FmgEntryTextType.TextBody)
                     return info.GetPatchedEntries(sort);
-                }
             }
             return new List<FMG.Entry>();
         }
 
         /// <summary>
-        /// Get patched FMG Entries for the specified FMG ID.
+        /// Get patched FMG Entries for the specified category and text type.
         /// </summary>
-        /// <returns>List of entries if found; empty list otherwise.</returns>
-        public static List<FMG.Entry> GetFmgEntriesByID(FmgIDType fmgID, bool sort = true)
+        /// <param name="category">FMGEntryCategory . If "None", an empty list will be returned.</param>
+        /// <returns>List of patched entries if found; empty list otherwise.</returns>
+        public static List<FMG.Entry> GetFmgEntriesByCategoryAndTextType(FmgEntryCategory category, FmgEntryTextType textType, bool sort = true)
+        {
+            if (category == FmgEntryCategory.None)
+                return new List<FMG.Entry>();
+            foreach (var info in _fmgInfoBank)
+            {
+                if (info.EntryCategory == category && info.EntryType == textType)
+                    return info.GetPatchedEntries(sort);
+            }
+            return new List<FMG.Entry>();
+        }
+
+        /// <summary>
+        /// Get patched FMG Entries for the specified FmgIDType.
+        /// </summary>
+        /// <returns>List of patched entries if found; empty list otherwise.</returns>
+        public static List<FMG.Entry> GetFmgEntriesByFmgIDType(FmgIDType fmgID, bool sort = true)
         {
             foreach (var info in _fmgInfoBank)
             {
                 if (info.FmgID == fmgID)
-                {
                     return info.GetPatchedEntries(sort);
-                }
             }
             return new List<FMG.Entry>();
         }
@@ -1188,38 +1199,44 @@ namespace StudioCore.TextEditor
             {
                 ID = id,
             };
-            if (fmgInfo.EntryCategory == FmgEntryCategory.None)
+
+            if (fmgInfo.EntryCategory == FmgEntryCategory.None || CFG.Current.FMG_NoGroupedFmgEntries)
             {
                 var entryPairs = fmgInfo.GetPatchedEntryFMGPairs();
                 var pair = entryPairs.Find(e => e.Entry.ID == id);
+                if (pair == null)
+                    return eGroup;
                 eGroup.TextBody = pair.Entry;
                 eGroup.TextBodyInfo = pair.FmgInfo;
+                return eGroup;
             }
-            else
+
+            foreach (var info in _fmgInfoBank)
             {
-                foreach (var info in _fmgInfoBank)
+                if (info.EntryCategory == fmgInfo.EntryCategory && info.PatchParent == null)
                 {
-                    if (info.EntryCategory == fmgInfo.EntryCategory && info.PatchParent == null)
+                    var entryPairs = info.GetPatchedEntryFMGPairs();
+                    var pair = entryPairs.Find(e => e.Entry.ID == id);
+                    if (pair != null)
                     {
-                        var entryPairs = info.GetPatchedEntryFMGPairs();
-                        var pair = entryPairs.Find(e => e.Entry.ID == id);
-                        if (pair != null)
+                        switch (info.EntryType)
                         {
-                            switch (info.EntryType)
-                            {
-                                case FmgEntryTextType.Title:
-                                    eGroup.Title = pair.Entry;
-                                    eGroup.TitleInfo = pair.FmgInfo;
-                                    break;
-                                case FmgEntryTextType.Summary:
-                                    eGroup.Summary = pair.Entry;
-                                    eGroup.SummaryInfo = pair.FmgInfo;
-                                    break;
-                                case FmgEntryTextType.Description:
-                                    eGroup.Description = pair.Entry;
-                                    eGroup.DescriptionInfo = pair.FmgInfo;
-                                    break;
-                            }
+                            case FmgEntryTextType.Title:
+                                eGroup.Title = pair.Entry;
+                                eGroup.TitleInfo = pair.FmgInfo;
+                                break;
+                            case FmgEntryTextType.Summary:
+                                eGroup.Summary = pair.Entry;
+                                eGroup.SummaryInfo = pair.FmgInfo;
+                                break;
+                            case FmgEntryTextType.Description:
+                                eGroup.Description = pair.Entry;
+                                eGroup.DescriptionInfo = pair.FmgInfo;
+                                break;
+                            case FmgEntryTextType.TextBody:
+                                eGroup.TextBody = pair.Entry;
+                                eGroup.TextBodyInfo = pair.FmgInfo;
+                                break;
                         }
                     }
                 }
@@ -1415,8 +1432,8 @@ namespace StudioCore.TextEditor
             // Load the fmg bnd, replace fmgs, and save
             IBinder fmgBinderItem;
             IBinder fmgBinderMenu;
-            var itemMsgPath = AssetLocator.GetItemMsgbnd(ref _languageFolder);
-            var menuMsgPath = AssetLocator.GetMenuMsgbnd(ref _languageFolder);
+            var itemMsgPath = AssetLocator.GetItemMsgbnd(_languageFolder);
+            var menuMsgPath = AssetLocator.GetMenuMsgbnd(_languageFolder);
             if (AssetLocator.Type == GameType.DemonsSouls || AssetLocator.Type == GameType.DarkSoulsPTDE || AssetLocator.Type == GameType.DarkSoulsRemastered)
             {
                 fmgBinderItem = BND3.Read(itemMsgPath.AssetPath);
@@ -1446,8 +1463,8 @@ namespace StudioCore.TextEditor
                 }
             }
 
-            var itemMsgPathDest = AssetLocator.GetItemMsgbnd(ref _languageFolder, true);
-            var menuMsgPathDest = AssetLocator.GetMenuMsgbnd(ref _languageFolder, true);
+            var itemMsgPathDest = AssetLocator.GetItemMsgbnd(_languageFolder, true);
+            var menuMsgPathDest = AssetLocator.GetMenuMsgbnd(_languageFolder, true);
             if (fmgBinderItem is BND3 bnd3)
             {
                 Utils.WriteWithBackup(AssetLocator.GameRootDirectory,
@@ -1467,7 +1484,6 @@ namespace StudioCore.TextEditor
         public static void SetAssetLocator(AssetLocator l)
         {
             AssetLocator = l;
-            //ReloadFMGs();
         }
     }
 }

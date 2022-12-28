@@ -394,9 +394,14 @@ namespace StudioCore.MsbEditor
             }
             if (committed)
             {
-                if (_lastUncommittedAction != null)
+                if (_lastUncommittedAction != null && ContextActionManager.PeekUndoAction() == _lastUncommittedAction)
                 {
-                    ContextActionManager.ExecuteAction(_lastUncommittedAction);
+                    if (_lastUncommittedAction is MultipleEntityPropertyChangeAction a)
+                    {
+                        ContextActionManager.UndoAction();
+                        a.UpdateRenderModel = true; // Update render model on commit execution, and update on undo/redo.
+                        ContextActionManager.ExecuteAction(a);
+                    }
                     _lastUncommittedAction = null;
                     _changingPropery = null;
                     _changingObject = null;
@@ -407,11 +412,10 @@ namespace StudioCore.MsbEditor
         {
             if (prop == _changingPropery && _lastUncommittedAction != null && ContextActionManager.PeekUndoAction() == _lastUncommittedAction)
             {
-                //ContextActionManager.UndoAction();
+                ContextActionManager.UndoAction();
             }
             else
             {
-                // TODO2: Not sure if this is necessary anymore
                 _lastUncommittedAction = null;
             }
             MultipleEntityPropertyChangeAction action;
@@ -425,6 +429,7 @@ namespace StudioCore.MsbEditor
 
             }
             action = new MultipleEntityPropertyChangeAction((PropertyInfo)prop, ents, newval, arrayindex);
+            ContextActionManager.ExecuteAction(action);
 
             _lastUncommittedAction = action;
             _changingPropery = prop;
@@ -501,6 +506,7 @@ namespace StudioCore.MsbEditor
             object newval;
             bool changed = PropertyRow(propType, oldval, out newval, nullableEntity, proprow);
             bool committed = ImGui.IsItemDeactivatedAfterEdit();
+            //bool committed = ImGui.IsItemDeactivatedAfterEdit() || !ImGui.IsAnyItemActive();
             UpdateProperty(proprow, nullableSelection, paramRowOrCell, newval, changed, committed);
             ImGui.NextColumn();
             ImGui.PopID();
@@ -525,13 +531,13 @@ namespace StudioCore.MsbEditor
             if (att != null)
             {
                 ImGui.NextColumn();
-                List<string> refs = new List<string>();
-                refs.Add(att.ParamName);
-                Editor.EditorDecorations.ParamRefText(refs);
+                List<ParamEditor.ParamRef> refs = new List<ParamEditor.ParamRef>();
+                refs.Add(new ParamEditor.ParamRef(att.ParamName));
+                Editor.EditorDecorations.ParamRefText(refs, null);
                 ImGui.NextColumn();
                 var id = oldval; //oldval cannot always be casted to int
-                Editor.EditorDecorations.ParamRefsSelectables(ParamEditor.ParamBank.PrimaryBank, refs, id);
-                return Editor.EditorDecorations.ParamRefEnumContextMenu(ParamEditor.ParamBank.PrimaryBank, id, ref newObj, refs, null);
+                Editor.EditorDecorations.ParamRefsSelectables(ParamEditor.ParamBank.PrimaryBank, refs, null, id);
+                return Editor.EditorDecorations.ParamRefEnumContextMenu(ParamEditor.ParamBank.PrimaryBank, id, ref newObj, refs, null, null, null);
             }
             return false;
         }
@@ -581,6 +587,7 @@ namespace StudioCore.MsbEditor
 
         private void PropEditorGeneric(Selection selection, HashSet<Entity> entSelection, object target = null, bool decorate = true)
         {
+            float scale = ImGuiRenderer.GetUIScale();
             var firstEnt = entSelection.First();
             var obj = (target == null) ? firstEnt.WrappedObject : target;
             var type = obj.GetType();
@@ -667,7 +674,7 @@ namespace StudioCore.MsbEditor
                                 {
                                     ImGui.SetItemDefaultFocus();
                                 }
-                                bool committed = ImGui.IsItemDeactivatedAfterEdit();
+                                bool committed = ImGui.IsItemDeactivatedAfterEdit() || !ImGui.IsAnyItemActive();
                                 if (ParamRefRow(prop, oldval, ref newval))
                                 {
                                     changed = true;
@@ -721,7 +728,7 @@ namespace StudioCore.MsbEditor
                                 {
                                     ImGui.SetItemDefaultFocus();
                                 }
-                                bool committed = ImGui.IsItemDeactivatedAfterEdit();
+                                bool committed = ImGui.IsItemDeactivatedAfterEdit() || !ImGui.IsAnyItemActive();
                                 if (ParamRefRow(prop, oldval, ref newval))
                                 {
                                     changed = true;
@@ -877,7 +884,7 @@ namespace StudioCore.MsbEditor
                         {
                             ImGui.SetItemDefaultFocus();
                         }
-                        bool committed = ImGui.IsItemDeactivatedAfterEdit();
+                        bool committed = ImGui.IsItemDeactivatedAfterEdit() || !ImGui.IsAnyItemActive();
                         if (ParamRefRow(prop, oldval, ref newval))
                         {
                             changed = true;
@@ -891,6 +898,8 @@ namespace StudioCore.MsbEditor
                     id++;
                 }
             }
+
+            var refID = 0; // ID for ImGui distinction
             if (decorate && entSelection.Count == 1)
             {
                 ImGui.Columns(1);
@@ -898,7 +907,7 @@ namespace StudioCore.MsbEditor
                 {
                     ImGui.NewLine();
                     ImGui.Text("References: ");
-                    ImGui.Indent(10);
+                    ImGui.Indent(10 * scale);
                     foreach (var m in firstEnt.References)
                     {
                         foreach (var n in m.Value)
@@ -906,7 +915,7 @@ namespace StudioCore.MsbEditor
                             if (n is Entity e)
                             {
                                 var nameWithType = e.PrettyName.Insert(2, e.WrappedObject.GetType().Name + " - ");
-                                if (ImGui.Button(nameWithType))
+                                if (ImGui.Button(nameWithType + "##MSBRefTo" + refID))
                                 {
                                     selection.ClearSelection();
                                     selection.AddSelection(e);
@@ -923,7 +932,7 @@ namespace StudioCore.MsbEditor
                                 {
                                     prettyName += $" <{metaName.Replace("--", "")}>";
                                 }
-                                if (ImGui.Button(prettyName))
+                                if (ImGui.Button(prettyName + "##MSBRefTo" + refID))
                                 {
                                     Scene.ISelectable rootTarget = r.GetSelectionTarget();
                                     selection.ClearSelection();
@@ -954,33 +963,36 @@ namespace StudioCore.MsbEditor
                                     ImGui.EndPopup();
                                 }
                             }
+                            refID++;
                         }
                     }
                 }
-                ImGui.Unindent(10);
+                ImGui.Unindent(10 * scale);
                 ImGui.NewLine();
                 ImGui.Text("Objects referencing this object:");
-                ImGui.Indent(10);
+                ImGui.Indent(10 * scale);
                 foreach (var m in firstEnt.GetReferencingObjects())
                 {
                     var nameWithType = m.PrettyName.Insert(2, m.WrappedObject.GetType().Name + " - ");
-                    if (ImGui.Button(nameWithType))
+                    if (ImGui.Button(nameWithType + "##MSBRefBy" + refID))
                     {
                         selection.ClearSelection();
                         selection.AddSelection(m);
                     }
+                    refID++;
                 }
-                ImGui.Unindent(10);
+                ImGui.Unindent(10 * scale);
             }
         }
 
         public void OnGui(Selection selection, string id, float w, float h)
         {
+            float scale = ImGuiRenderer.GetUIScale();
             var entSelection = selection.GetFilteredSelection<Entity>();
 
             ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.145f, 0.145f, 0.149f, 1.0f));
-            ImGui.SetNextWindowSize(new Vector2(350, h - 80), ImGuiCond.FirstUseEver);
-            ImGui.SetNextWindowPos(new Vector2(w - 370, 20), ImGuiCond.FirstUseEver);
+            ImGui.SetNextWindowSize(new Vector2(350, h - 80) * scale, ImGuiCond.FirstUseEver);
+            ImGui.SetNextWindowPos(new Vector2(w - 370, 20) * scale, ImGuiCond.FirstUseEver);
             ImGui.Begin($@"Properties##{id}");
             ImGui.BeginChild("propedit");
             if (entSelection.Count > 1)

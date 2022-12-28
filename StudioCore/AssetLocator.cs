@@ -85,11 +85,21 @@ namespace StudioCore
 
         public static readonly string ERRegulationFilter =
             "Regulation file (regulation.bin) |REGULATION.BIN";
+        
         public static readonly string ParamFilter =
-            "Regulation file (regulation.bin) |REGULATION.BIN|" +
+            ERRegulationFilter + "|" +
             "Data file (Data0.bdt) |DATA0.BDT|" +
             "ParamBndDcx (gameparam.parambnd.dcx) |GAMEPARAM.PARAMBND.DCX|" +
-            "ParamBnd (gameparam.parambnd) |GAMEPARAM.PARAMBND";
+            "ParamBnd (gameparam.parambnd) |GAMEPARAM.PARAMBND|" +
+            "Enc_RegBndDcx (enc_regulation.bnd.dcx) |ENC_REGULATION.BND.DCX|" +
+            "All Files|*.*";
+
+        public static readonly string ERParamUpgradeFilter =
+            ERRegulationFilter + "|" +
+            "All Files|*.*";
+         public static readonly string LooseParamFilter =
+            "Loose Param file (*.Param) |*.Param*|" +
+            "All Files|*.*";   
         
         public GameType Type { get; private set; } = GameType.Undefined;
 
@@ -166,7 +176,18 @@ namespace StudioCore
 
         public bool CheckFilesExpanded(string gamepath, GameType game)
         {
-            if (game == GameType.DarkSoulsPTDE || game == GameType.DarkSoulsIII || game == GameType.Sekiro)
+            if (game == GameType.EldenRing)
+            {
+                if (!Directory.Exists($@"{gamepath}\map"))
+                {
+                    return false;
+                }
+                if (!Directory.Exists($@"{gamepath}\asset"))
+                {
+                    return false;
+                }
+            }
+            if (game is GameType.DarkSoulsPTDE or GameType.DarkSoulsIII or GameType.Sekiro)
             {
                 if (!Directory.Exists($@"{gamepath}\map"))
                 {
@@ -498,10 +519,16 @@ namespace StudioCore
                 else
                     path = $@"map\{mapid}";
 
-                string[] files;
+                List<string> files = new();
                 try
                 {
-                    files = Directory.GetFiles($@"{GameRootDirectory}\{path}", "*.btl.*");
+                    files = Directory.GetFiles($@"{GameRootDirectory}\{path}", "*.btl*").Where(f => !f.EndsWith(".bak")).ToList();
+                    if (Directory.Exists($"{GameModDirectory}\\{path}"))
+                    {
+                        // Check for additional BTLs the user has created.
+                        files.AddRange(Directory.GetFiles($@"{GameModDirectory}\{path}", "*.btl*").Where(f => !f.EndsWith(".bak")).ToList());
+                        files = files.DistinctBy(f => f.Split("\\").Last()).ToList();
+                    }
                 }
                 catch (DirectoryNotFoundException)
                 {
@@ -616,39 +643,20 @@ namespace StudioCore
         /// <summary>
         /// Get path of item.msgbnd (english by default)
         /// </summary>
-        public AssetDescription GetItemMsgbnd(ref string langFolder, bool writemode = false)
+        public AssetDescription GetItemMsgbnd(string langFolder, bool writemode = false)
         {
-            return GetMsgbnd("item", ref langFolder, writemode);
+            return GetMsgbnd("item", langFolder, writemode);
         }
         /// <summary>
         /// Get path of menu.msgbnd (english by default)
         /// </summary>
-        public AssetDescription GetMenuMsgbnd(ref string langFolder, bool writemode = false)
+        public AssetDescription GetMenuMsgbnd(string langFolder, bool writemode = false)
         {
-            return GetMsgbnd("menu", ref langFolder, writemode);
+            return GetMsgbnd("menu", langFolder, writemode);
         }
-        public AssetDescription GetMsgbnd(string msgBndType, ref string langFolder, bool writemode = false)
+        public AssetDescription GetMsgbnd(string msgBndType, string langFolder, bool writemode = false)
         {
             AssetDescription ad = new();
-            if (langFolder == "")
-            {
-                //pick default (english) path
-                foreach (var lang in GetMsgLanguages())
-                {
-                    string folder = lang.Value.Split("\\").Last();
-                    if (folder.Contains("eng", StringComparison.CurrentCultureIgnoreCase)) //I believe this is good enough.
-                    {
-                        langFolder = folder;
-                        break;
-                    }
-                }
-                if (langFolder == "")
-                {
-                    // Could not find default [english] text msgbnd.
-                    return ad;
-                }
-            }
-
             string path = $@"msg\{langFolder}\{msgBndType}.msgbnd.dcx";
             if (Type == GameType.DemonsSouls)
             {
@@ -1588,7 +1596,11 @@ namespace StudioCore
                     }
                     else if (Type == GameType.EldenRing)
                     {
-                        return GetOverridenFilePath($@"asset\aeg\{objid.Substring(0, 6)}\{objid}.geombnd.dcx");
+                        // Derive subfolder path from model name (all vanilla AEG are within subfolders)
+                        if (objid.Length >= 6)
+                            return GetOverridenFilePath($@"asset\aeg\{objid.Substring(0, 6)}\{objid}.geombnd.dcx");
+                        else
+                            return null;
                     }
                     return GetOverridenFilePath($@"obj\{objid}.objbnd.dcx");
                 }

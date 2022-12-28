@@ -116,7 +116,7 @@ namespace StudioCore.ParamEditor
                 foreach (var f in pfiles)
                 {
                     var pdef = PARAMDEF.XmlDeserialize(f);
-                    defPairs.Add((pdef.ParamType, pdef));
+                    defPairs.Add((f, pdef));
                     if (!_patchParamdefs.ContainsKey(pdef.ParamType))
                     {
                         _patchParamdefs[pdef.ParamType] = new Dictionary<ulong, PARAMDEF>();
@@ -546,7 +546,7 @@ namespace StudioCore.ParamEditor
             // _params = new Dictionary<string, PARAM>();
             foreach (var f in parambnd.Files)
             {
-                if (!f.Name.ToUpper().EndsWith(".PARAM") || Path.GetFileNameWithoutExtension(f.Name).StartsWith("default_"))
+                if (!f.Name.ToUpper().EndsWith(".PARAM"))
                 {
                     continue;
                 }
@@ -631,6 +631,27 @@ namespace StudioCore.ParamEditor
                 param = $@"{dir}\param\gameparam\{paramBinderName}";
             }
             LoadParamsDESFromFile(param);
+
+            //DrawParam
+            Dictionary<string, string> drawparams = new();
+            if (Directory.Exists($@"{dir}\param\DrawParam"))
+            {
+                foreach (var p in Directory.GetFiles($@"{dir}\param\DrawParam", "*.parambnd.dcx"))
+                {
+                    drawparams[Path.GetFileNameWithoutExtension(p)] = p;
+                }
+            }
+            if (Directory.Exists($@"{mod}\param\DrawParam"))
+            {
+                foreach (var p in Directory.GetFiles($@"{mod}\param\DrawParam", "*.parambnd.dcx"))
+                {
+                    drawparams[Path.GetFileNameWithoutExtension(p)] = p;
+                }
+            }
+            foreach (var drawparam in drawparams)
+            {
+                LoadParamsDESFromFile(drawparam.Value);
+            }
         }
         private void LoadVParamsDES()
         {
@@ -640,6 +661,13 @@ namespace StudioCore.ParamEditor
                 paramBinderName = "gameparamna.parambnd.dcx";
             }
             LoadParamsDESFromFile($@"{AssetLocator.GameRootDirectory}\param\gameparam\{paramBinderName}");
+            if (Directory.Exists($@"{AssetLocator.GameRootDirectory}\param\DrawParam"))
+            {
+                foreach (var p in Directory.GetFiles($@"{AssetLocator.GameRootDirectory}\param\DrawParam", "*.parambnd.dcx"))
+                {
+                    LoadParamsDS1FromFile(p);
+                }
+            }
         }
         private void LoadParamsDESFromFile(string path)
         {
@@ -663,10 +691,38 @@ namespace StudioCore.ParamEditor
                 param = $@"{dir}\param\GameParam\GameParam.parambnd";
             }
             LoadParamsDS1FromFile(param);
+
+            //DrawParam
+            Dictionary<string, string> drawparams = new();
+            if (Directory.Exists($@"{dir}\param\DrawParam"))
+            {
+                foreach (var p in Directory.GetFiles($@"{dir}\param\DrawParam", "*.parambnd"))
+                {
+                    drawparams[Path.GetFileNameWithoutExtension(p)] = p;
+                }
+            }
+            if (Directory.Exists($@"{mod}\param\DrawParam"))
+            {
+                foreach (var p in Directory.GetFiles($@"{mod}\param\DrawParam", "*.parambnd"))
+                {
+                    drawparams[Path.GetFileNameWithoutExtension(p)] = p;
+                }
+            }
+            foreach (var drawparam in drawparams)
+            {
+                LoadParamsDS1FromFile(drawparam.Value);
+            }
         }
         private void LoadVParamsDS1()
         {
             LoadParamsDS1FromFile($@"{AssetLocator.GameRootDirectory}\param\GameParam\GameParam.parambnd");
+            if (Directory.Exists($@"{AssetLocator.GameRootDirectory}\param\DrawParam"))
+            {
+                foreach (var p in Directory.GetFiles($@"{AssetLocator.GameRootDirectory}\param\DrawParam", "*.parambnd"))
+                {
+                    LoadParamsDS1FromFile(p);
+                }
+            }
         }
         private void LoadParamsDS1FromFile(string path)
         {
@@ -691,10 +747,38 @@ namespace StudioCore.ParamEditor
                 param = $@"{dir}\param\GameParam\GameParam.parambnd.dcx";
             }
             LoadParamsDS1RFromFile(param);
+
+            //DrawParam
+            Dictionary<string, string> drawparams = new();
+            if (Directory.Exists($@"{dir}\param\DrawParam"))
+            {
+                foreach (var p in Directory.GetFiles($@"{dir}\param\DrawParam", "*.parambnd.dcx"))
+                {
+                    drawparams[Path.GetFileNameWithoutExtension(p)] = p;
+                }
+            }
+            if (Directory.Exists($@"{mod}\param\DrawParam"))
+            {
+                foreach (var p in Directory.GetFiles($@"{mod}\param\DrawParam", "*.parambnd.dcx"))
+                {
+                    drawparams[Path.GetFileNameWithoutExtension(p)] = p;
+                }
+            }
+            foreach (var drawparam in drawparams)
+            {
+                LoadParamsDS1RFromFile(drawparam.Value);
+            }
         }
         private void LoadVParamsDS1R()
         {
             LoadParamsDS1RFromFile($@"{AssetLocator.GameRootDirectory}\param\GameParam\GameParam.parambnd.dcx");
+            if (Directory.Exists($@"{AssetLocator.GameRootDirectory}\param\DrawParam"))
+            {
+                foreach (var p in Directory.GetFiles($@"{AssetLocator.GameRootDirectory}\param\DrawParam", "*.parambnd.dcx"))
+                {
+                    LoadParamsDS1FromFile(p);
+                }
+            }
         }
         private void LoadParamsDS1RFromFile(string path)
         {
@@ -730,14 +814,18 @@ namespace StudioCore.ParamEditor
         }
 
         /// <summary>
-        /// Map related params that should not be in the param editor
+        /// Map related params.
         /// </summary>
-        private static List<string> _ds2ParamBlacklist = new List<string>()
+        public readonly static List<string> DS2MapParamlist = new List<string>()
         {
             "demopointlight",
             "demospotlight",
             "eventlocation",
             "eventparam",
+            "GeneralLocationEventParam",
+            "generatorparam",
+            "generatorregistparam",
+            "generatorlocation",
             "generatordbglocation",
             "hitgroupparam",
             "intrudepointparam",
@@ -808,28 +896,22 @@ namespace StudioCore.ParamEditor
                 var paramfiles = Directory.GetFileSystemEntries(d, @"*.param");
                 foreach (var p in paramfiles)
                 {
-                    bool blacklisted = false;
                     var name = Path.GetFileNameWithoutExtension(p);
-                    foreach (var bl in _ds2ParamBlacklist)
-                    {
-                        if (name.StartsWith(bl))
-                        {
-                            blacklisted = true;
-                            break;
-                        }
-                    }
-                    if (blacklisted)
-                    {
-                        continue;
-                    }
-
                     var lp = Param.Read(p);
                     var fname = lp.ParamType;
-                    PARAMDEF def = AssetLocator.GetParamdefForParam(fname);
-                    lp.ApplyParamdef(def);
-                    if (!_params.ContainsKey(name))
+
+                    try
                     {
-                        _params.Add(name, lp);
+                        PARAMDEF def = AssetLocator.GetParamdefForParam(fname);
+                        lp.ApplyParamdef(def);
+                        if (!_params.ContainsKey(name))
+                        {
+                            _params.Add(name, lp);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        TaskManager.warningList.TryAdd($"{fname} DefFail", $"Could not apply ParamDef for {fname}");
                     }
                 }
             }
@@ -858,7 +940,14 @@ namespace StudioCore.ParamEditor
             if (EnemyParam != null)
             {
                 PARAMDEF def = AssetLocator.GetParamdefForParam(EnemyParam.ParamType);
-                EnemyParam.ApplyParamdef(def);
+                try
+                {
+                    EnemyParam.ApplyParamdef(def);
+                }
+                catch (Exception e)
+                {
+                    TaskManager.warningList.TryAdd($"{EnemyParam.ParamType} DefFail", $"Could not apply ParamDef for {EnemyParam.ParamType}");
+                }
             }
             LoadParamFromBinder(paramBnd, ref _params, out _paramVersion);
         }
@@ -1066,7 +1155,7 @@ namespace StudioCore.ParamEditor
                 }
             });
         }
-        public static void LoadAuxBank(string path)
+        public static void LoadAuxBank(string path, string looseDir, string enemyPath)
         {
             // Steal assetlocator
             AssetLocator locator = PrimaryBank.AssetLocator;
@@ -1089,6 +1178,10 @@ namespace StudioCore.ParamEditor
             else if (locator.Type == GameType.Bloodborne)
             {
                 newBank.LoadParamsBBSekiroFromFile(path);
+            }
+            else if (locator.Type == GameType.DarkSoulsIISOTFS)
+            {
+                newBank.LoadParamsDS2FromFile(new List<string>{looseDir}, path, enemyPath);
             }
             else if (locator.Type == GameType.DarkSoulsRemastered)
             {
@@ -1189,6 +1282,9 @@ namespace StudioCore.ParamEditor
         // In theory this should be called twice for both Vanilla and PrimaryBank. However, as primarybank is the only one to ever change, this is unnecessary.
         public static void RefreshParamRowDiffCache(Param.Row row, Param otherBankParam, HashSet<int> cache)
         {
+            if (otherBankParam == null)
+                return;
+
             var otherBankRows = otherBankParam.Rows.Where(cell => cell.ID == row.ID).ToArray();
             if (IsChanged(row, otherBankRows))
                 cache.Add(row.ID);
@@ -1243,8 +1339,24 @@ namespace StudioCore.ParamEditor
                     p.Bytes = _params[Path.GetFileNameWithoutExtension(p.Name)].Write();
                 }
             }
-            // Don't write to mod dir for now
             Utils.WriteWithBackup(dir, mod, @"param\GameParam\GameParam.parambnd", paramBnd);
+
+            // Drawparam
+            if (Directory.Exists($@"{AssetLocator.GameRootDirectory}\param\DrawParam"))
+            {
+                foreach (var bnd in Directory.GetFiles($@"{AssetLocator.GameRootDirectory}\param\DrawParam", "*.parambnd"))
+                {
+                    paramBnd = BND3.Read(bnd);
+                    foreach (var p in paramBnd.Files)
+                    {
+                        if (_params.ContainsKey(Path.GetFileNameWithoutExtension(p.Name)))
+                        {
+                            p.Bytes = _params[Path.GetFileNameWithoutExtension(p.Name)].Write();
+                        }
+                    }
+                    Utils.WriteWithBackup(dir, mod, @$"param\DrawParam\{Path.GetFileName(bnd)}", paramBnd);
+                }
+            }
         }
         private void SaveParamsDS1R()
         {
@@ -1273,6 +1385,23 @@ namespace StudioCore.ParamEditor
                 }
             }
             Utils.WriteWithBackup(dir, mod, @"param\GameParam\GameParam.parambnd.dcx", paramBnd);
+
+            // Drawparam
+            if (Directory.Exists($@"{AssetLocator.GameRootDirectory}\param\DrawParam"))
+            {
+                foreach (var bnd in Directory.GetFiles($@"{AssetLocator.GameRootDirectory}\param\DrawParam", "*.parambnd.dcx"))
+                {
+                    paramBnd = BND3.Read(bnd);
+                    foreach (var p in paramBnd.Files)
+                    {
+                        if (_params.ContainsKey(Path.GetFileNameWithoutExtension(p.Name)))
+                        {
+                            p.Bytes = _params[Path.GetFileNameWithoutExtension(p.Name)].Write();
+                        }
+                    }
+                    Utils.WriteWithBackup(dir, mod, @$"param\DrawParam\{Path.GetFileName(bnd)}", paramBnd);
+                }
+            }
         }
 
         private void SaveParamsDS2(bool loose)
@@ -1320,11 +1449,17 @@ namespace StudioCore.ParamEditor
             // If params aren't loose, replace params with edited ones
             if (!loose)
             {
-                foreach (var p in paramBnd.Files)
+                // Replace params in paramBND, write remaining params loosely
+                foreach (var p in _params)
                 {
-                    if (_params.ContainsKey(Path.GetFileNameWithoutExtension(p.Name)))
+                    var bnd = paramBnd.Files.Find(e => Path.GetFileNameWithoutExtension(e.Name) == p.Key);
+                    if (bnd != null)
                     {
-                        p.Bytes = _params[Path.GetFileNameWithoutExtension(p.Name)].Write();
+                        bnd.Bytes = p.Value.Write();
+                    }
+                    else
+                    {
+                        Utils.WriteWithBackup(dir, mod, $@"Param\{p.Key}.param", p.Value);
                     }
                 }
             }
@@ -1480,6 +1615,23 @@ namespace StudioCore.ParamEditor
                 }
             }
             Utils.WriteWithBackup(dir, mod, $@"param\gameparam\{paramBinderName}", paramBnd);
+
+            // Drawparam
+            if (Directory.Exists($@"{AssetLocator.GameRootDirectory}\param\DrawParam"))
+            {
+                foreach (var bnd in Directory.GetFiles($@"{AssetLocator.GameRootDirectory}\param\DrawParam", "*.parambnd.dcx"))
+                {
+                    paramBnd = BND3.Read(bnd);
+                    foreach (var p in paramBnd.Files)
+                    {
+                        if (_params.ContainsKey(Path.GetFileNameWithoutExtension(p.Name)))
+                        {
+                            p.Bytes = _params[Path.GetFileNameWithoutExtension(p.Name)].Write();
+                        }
+                    }
+                    Utils.WriteWithBackup(dir, mod, @$"param\DrawParam\{Path.GetFileName(bnd)}", paramBnd);
+                }
+            }
         }
         private void SaveParamsER(bool partial)
         {
@@ -1770,6 +1922,10 @@ namespace StudioCore.ParamEditor
             // Take care of any more pending adds
             for (; currPendingAdd < pendingAdds.Length; currPendingAdd++)
             {
+                // If the pending add doesn't exist in the added rows list, it was a conflicting row
+                if (!addedRows.ContainsKey(pendingAdds[currPendingAdd]))
+                    continue;
+                
                 foreach (var arow in addedRows[pendingAdds[currPendingAdd]])
                 {
                     dest.AddRow(new Param.Row(arow, dest));
@@ -1818,6 +1974,8 @@ namespace StudioCore.ParamEditor
                     conflictingParams.Add(k, conflicts);
             }
             
+            ulong oldVersion = _paramVersion;
+
             // Set new params
             _params = updatedParams;
             _paramVersion = VanillaBank.ParamVersion;
@@ -1828,6 +1986,60 @@ namespace StudioCore.ParamEditor
             RefreshParamDiffCaches();
 
             return conflictingParams.Count > 0 ? ParamUpgradeResult.RowConflictsFound : ParamUpgradeResult.Success;
+        }
+
+        public (List<string>, List<string>) RunUpgradeEdits(ulong startVersion, ulong endVersion)
+        {
+            // Temporary data could be moved somewhere static
+            (ulong, string, string)[] paramUpgradeTasks = new (ulong, string, string)[0];
+            if (AssetLocator.Type == GameType.EldenRing)
+            {
+                // Note these all use modified as any unmodified row already matches the target. This only fails if a mod pre-empts fromsoft's exact change.
+                paramUpgradeTasks = new (ulong, string, string)[]{
+                    (10701000l, "1.07 - (SwordArtsParam) Move swordArtsType to swordArtsTypeNew", "param SwordArtsParam: modified: swordArtsTypeNew: = field swordArtsType;"),
+                    (10701000l, "1.07 - (SwordArtsParam) Set swordArtsType to 0", "param SwordArtsParam: modified && notadded: swordArtsType: = 0;"),
+                    (10701000l, "1.07 - (AtkParam PC/NPC) Set added finalAttackDamageRate refs to -1", "param AtkParam_(Pc|Npc): modified && added: finalDamageRateId: = -1;"),
+                    (10701000l, "1.07 - (AtkParam PC/NPC) Set notadded finalAttackDamageRate refs to vanilla", "param AtkParam_(Pc|Npc): modified && notadded: finalDamageRateId: = vanillafield finalDamageRateId;"),
+                    (10701000l, "1.07 - (AssetEnvironmentGeometryParam) Set reserved_124 to Vanilla v1.07 values", "param GameSystemCommonParam: modified && notadded: reserved_124: = vanillafield reserved_124;"),
+                    (10701000l, "1.07 - (AssetEnvironmentGeometryParam) Set reserved41 to Vanilla v1.07 values", "param PlayerCommonParam: modified: reserved41: = vanillafield reserved41;"),
+                    (10701000l, "1.07 - (AssetEnvironmentGeometryParam) Set Reserve_1 to Vanilla v1.07 values", "param AssetEnvironmentGeometryParam: modified: Reserve_1: = vanillafield Reserve_1;"),
+                    (10701000l, "1.07 - (AssetEnvironmentGeometryParam) Set Reserve_2 to Vanilla v1.07 values", "param AssetEnvironmentGeometryParam: modified: Reserve_2: = vanillafield Reserve_2;"),
+                    (10701000l, "1.07 - (AssetEnvironmentGeometryParam) Set Reserve_3 to Vanilla v1.07 values", "param AssetEnvironmentGeometryParam: modified: Reserve_3: = vanillafield Reserve_3;"),
+                    (10701000l, "1.07 - (AssetEnvironmentGeometryParam) Set Reserve_4 to Vanilla v1.07 values", "param AssetEnvironmentGeometryParam: modified: Reserve_4: = vanillafield Reserve_4;"),
+                    (10801000l, "1.08 - (BuddyParam) Set Unk1 to default value", "param BuddyParam: modified: Unk1: = 1410;"),
+                    (10801000l, "1.08 - (BuddyParam) Set Unk2 to default value", "param BuddyParam: modified: Unk2: = 1420;"),
+                    (10801000l, "1.08 - (BuddyParam) Set Unk11 to default value", "param BuddyParam: modified: Unk11: = 1400;"),
+                };
+            }
+
+            List<string> performed = new List<string>();
+            List<string> unperformed = new List<string>();
+
+            bool hasFailed = false;
+            foreach (var (version, task, command) in paramUpgradeTasks)
+            {
+                // Don't bother updating modified cache between edits
+                if (version <= startVersion || version > endVersion)
+                    continue;
+                
+                if (!hasFailed)
+                {
+                    try {
+                        var (result, actions) = MassParamEditRegex.PerformMassEdit(this, command, null);
+                        if (result.Type != MassEditResultType.SUCCESS)
+                            hasFailed = true;
+                    }
+                    catch (Exception e)
+                    {
+                        hasFailed = true;
+                    }
+                }
+                if (!hasFailed)
+                    performed.Add(task);
+                else
+                    unperformed.Add(task);
+            }
+            return (performed, unperformed);
         }
 
         public string GetChrIDForEnemy(long enemyID)
@@ -1952,6 +2164,16 @@ namespace StudioCore.ParamEditor
             };
 
             return equipDict[endurance];
+        }
+
+        public Param GetParamFromName(string param)
+        {
+            foreach (KeyValuePair<string, Param> pair in Params)
+            {
+                if (param == pair.Key)
+                    return pair.Value;
+            }
+            return null;
         }
     }
 }

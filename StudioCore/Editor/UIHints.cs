@@ -61,7 +61,7 @@ param EquipParamWeapon: name Dagger.* && idrange 10000 Infinity: throwAtkRate: *
 @"For help with regex or examples, consult the main help menu.
 This searchbar utilise Regex, and words surrounded by ! in commands indicate that a Regex expression may be used instead of plain text.
 All other words in capitals are parameters for the given command.
-Searches are case-insensitive and the searched term may appear anywhere in the target rows.
+Regex searches are case-insensitive and the searched term may appear anywhere in the target rows. To specify an exact match, surround the text with ^ and $ (eg. ^10$) or use a range variant.
 Multiple selectors can be given by separating them with &&.
 
 Row selection is done through any of the following:
@@ -118,12 +118,14 @@ Regex has a broad syntax and application, but with this quick guide and an onlin
 While regex is aimed at text and is not perfect for numbers, it can still be useful.
 Some common tools for mapstudio include:
 .* (match anything)
+^10$ (match only when the entire input is 10)
 [^0] (match anything that isn't just 0)
 ^[^-] (match anything that doesn't begin with -)
 ^2\d\d$ (match any number from 200 to 299)";
 
         public static bool AddImGuiHintButton(string id, ref string hint, bool canEdit = false, bool isRowHint = false)
         {
+            float scale = ImGuiRenderer.GetUIScale();
             bool ret = false;
             ImGui.SameLine();
             /*
@@ -150,7 +152,7 @@ Some common tools for mapstudio include:
                 {
                     if (ParamEditor.ParamEditorScreen.EditorMode && canEdit) //remove this, editor mode should be called earlier
                     {
-                        ImGui.InputTextMultiline("", ref hint, 8196, new Vector2(720, 480));
+                        ImGui.InputTextMultiline("", ref hint, 8196, new Vector2(720, 480) * scale);
                         if (ImGui.IsItemDeactivatedAfterEdit())
                             ret = true;
                     }
@@ -171,7 +173,7 @@ Some common tools for mapstudio include:
 
                     if (ParamEditor.ParamEditorScreen.EditorMode && canEdit) //remove this, editor mode should be called earlier
                     {
-                        ImGui.InputTextMultiline("", ref hint, 8196, new Vector2(720, 480));
+                        ImGui.InputTextMultiline("", ref hint, 8196, new Vector2(720, 480) * scale);
                         if (ImGui.IsItemDeactivatedAfterEdit())
                             ret = true;
                     }

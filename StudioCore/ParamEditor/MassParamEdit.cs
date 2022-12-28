@@ -39,8 +39,9 @@ namespace StudioCore.ParamEditor
                 {
                     if (column.ValueType == typeof(int))
                     {
-                        foreach (string reftype in FieldMetaData.Get(column.Def).RefTypes)
+                        foreach (ParamRef pRef in FieldMetaData.Get(column.Def).RefTypes)
                         {
+                            string reftype = pRef.param;
                             var p = bank.Params[reftype];
                             if (p == null)
                                 continue;
@@ -386,7 +387,7 @@ namespace StudioCore.ParamEditor
                         row = new Param.Row(id, name, p);
                         addedParams.Add(row);
                     }
-                    if (row.Name != null && !row.Name.Equals(name))
+                    if (!name.Equals(row.Name))
                         actions.Add(new PropertiesChangedAction(row.GetType().GetProperty("Name"), -1, row, name));
                     int index = 2;
                     foreach (Param.Column col in row.Cells)
@@ -402,7 +403,7 @@ namespace StudioCore.ParamEditor
                 }
                 changeCount = actions.Count;
                 addedCount = addedParams.Count;
-                actions.Add(new AddParamsAction(p, "legacystring", addedParams, appendOnly, replaceParams, false));
+                actions.Add(new AddParamsAction(p, "legacystring", addedParams, appendOnly, replaceParams));
                 if (changeCount != 0 || addedCount != 0)
                     actionManager.ExecuteAction(new CompoundAction(actions));
                 return new MassEditResult(MassEditResultType.SUCCESS, $@"{changeCount} cells affected, {addedCount} rows added");
@@ -452,7 +453,7 @@ namespace StudioCore.ParamEditor
                     }
                     if (field.Equals("Name"))
                     {
-                        if (row.Name != null && !row.Name.Equals(value))
+                        if (!value.Equals(row.Name))
                             actions.Add(new PropertiesChangedAction(row.GetType().GetProperty("Name"), -1, row, value));
                     }
                     else
@@ -486,7 +487,7 @@ namespace StudioCore.ParamEditor
             Param param = bank.Params[paramName];
             List<Param.Row> newRows = new List<Param.Row>(param.Rows);
             newRows.Sort((Param.Row a, Param.Row b)=>{return a.ID - b.ID;});
-            return new AddParamsAction(param, paramName, newRows, true, true, false); //appending same params and allowing overwrite
+            return new AddParamsAction(param, paramName, newRows, true, true); //appending same params and allowing overwrite
         }
     }
 
@@ -556,10 +557,10 @@ namespace StudioCore.ParamEditor
                 };
             }));
             argumentGetters.Add("vanillafield", (1, (param, field) => {
-                string paramName = ParamBank.VanillaBank.GetKeyForParam(param);
-                if (paramName == null)
+                var paramName = ParamBank.PrimaryBank.GetKeyForParam(param);
+                var vParam = ParamBank.VanillaBank.GetParamFromName(paramName);
+                if (vParam == null)
                     throw new Exception($@"Could not locate vanilla param for {param.ParamType}");
-                Param vParam = ParamBank.VanillaBank.Params[paramName];
                 Param.Column? col = vParam?[field[0]];
                 if (col == null)
                     throw new Exception($@"Could not locate field {field[0]}");

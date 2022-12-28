@@ -14,10 +14,11 @@ using StudioCore.Editor;
 
 namespace StudioCore.TextEditor
 {
-    class TextEditorScreen : EditorScreen
+    public class TextEditorScreen : EditorScreen
     {
         public ActionManager EditorActionManager = new ActionManager();
         private readonly PropertyEditor _propEditor = null;
+        private ProjectSettings _projectSettings;
 
         private FMGBank.EntryGroup _activeEntryGroup;
         private FMGBank.FMGInfo _activeFmgInfo;
@@ -40,6 +41,7 @@ namespace StudioCore.TextEditor
         private void ClearTextEditorCache()
         {
             CacheBank.ClearCaches();
+            _entryLabelCache = null;
             _EntryLabelCacheFiltered = null;
             _activeFmgInfo = null;
             _activeEntryGroup = null;
@@ -50,7 +52,7 @@ namespace StudioCore.TextEditor
 
         private void ResetActionManager()
         {
-            EditorActionManager = new();
+            EditorActionManager.Clear();
         }
 
         /// <summary>
@@ -82,25 +84,25 @@ namespace StudioCore.TextEditor
         {
             if (ImGui.BeginMenu("Edit", FMGBank.IsLoaded))
             {
-                if (ImGui.MenuItem("Undo", "Ctrl+Z", false, EditorActionManager.CanUndo()))
+                if (ImGui.MenuItem("Undo", KeyBindings.Current.Core_Undo.HintText, false, EditorActionManager.CanUndo()))
                 {
                     EditorActionManager.UndoAction();
                 }
-                if (ImGui.MenuItem("Redo", "Ctrl+Y", false, EditorActionManager.CanRedo()))
+                if (ImGui.MenuItem("Redo", KeyBindings.Current.Core_Redo.HintText, false, EditorActionManager.CanRedo()))
                 {
                     EditorActionManager.RedoAction();
                 }
-                if (ImGui.MenuItem("Delete Entry", "Delete", false, _activeEntryGroup != null))
+                if (ImGui.MenuItem("Delete Entry", KeyBindings.Current.Core_Delete.HintText, false, _activeEntryGroup != null))
                 {
                     DeleteFMGEntries(_activeEntryGroup);
                 }
-                if (ImGui.MenuItem("Duplicate Entry", "Ctrl+D", false, _activeEntryGroup != null))
+                if (ImGui.MenuItem("Duplicate Entry", KeyBindings.Current.Core_Duplicate.HintText, false, _activeEntryGroup != null))
                 {
                     DuplicateFMGEntries(_activeEntryGroup);
                 }
                 ImGui.EndMenu();
             }
-            if (ImGui.BeginMenu("Text Language"))
+            if (ImGui.BeginMenu("Text Language", !FMGBank.IsLoading))
             {
                 var folders = FMGBank.AssetLocator.GetMsgLanguages();
                 if (folders.Count == 0)
@@ -121,7 +123,7 @@ namespace StudioCore.TextEditor
             }
             if (ImGui.BeginMenu("Import/Export", FMGBank.IsLoaded))
             {
-                if (ImGui.MenuItem("Import Files"))
+                if (ImGui.MenuItem("Import Files", KeyBindings.Current.TextFMG_Import.HintText))
                 {
                     if (FMGBank.ImportFMGs())
                     {
@@ -129,7 +131,7 @@ namespace StudioCore.TextEditor
                         ResetActionManager();
                     }
                 }
-                if (ImGui.MenuItem("Export All Text"))
+                if (ImGui.MenuItem("Export All Text", KeyBindings.Current.TextFMG_ExportAll.HintText))
                 {
                     FMGBank.ExportFMGs();
                 }
@@ -137,98 +139,68 @@ namespace StudioCore.TextEditor
             }
         }
 
-        private void FMGSearchLogic()
+        private void FMGSearchLogic(ref bool doFocus)
         {
-            // Todo: This could be cleaned up.
             if (_entryLabelCache != null)
             {
                 if (_searchFilter != _searchFilterCached)
                 {
-                    _EntryLabelCacheFiltered = _entryLabelCache;
                     List<FMG.Entry> matches = new();
+                    _EntryLabelCacheFiltered = _entryLabelCache;
 
-                    if (_activeFmgInfo.GroupedEntry)
-                    {
-                        // Grouped entries
-                        List<FMG.Entry> searchEntries;
-                        if (_searchFilter.Length > _searchFilterCached.Length)
-                            searchEntries = _EntryLabelCacheFiltered;
-                        else
-                            searchEntries = _entryLabelCache;
-
-                        foreach (var entry in searchEntries)
-                        {
-                            // Titles
-                            if (entry.ID.ToString().Contains(_searchFilter, StringComparison.CurrentCultureIgnoreCase))
-                            {
-                                // ID search
-                                matches.Add(entry);
-                            }
-                            else if (entry.Text != null)
-                            {
-                                // Text search
-                                if (entry.Text.Contains(_searchFilter, StringComparison.CurrentCultureIgnoreCase))
-                                    matches.Add(entry);
-                            }
-                        }
-                        foreach (var entry in FMGBank.GetFmgEntriesByType(_activeFmgInfo.EntryCategory, FMGBank.FmgEntryTextType.Description, false))
-                        {
-                            // Descriptions
-                            if (entry.Text != null)
-                            {
-                                if (entry.Text.Contains(_searchFilter, StringComparison.CurrentCultureIgnoreCase))
-                                {
-                                    var search = _entryLabelCache.Find(e => e.ID == entry.ID && !matches.Contains(e));
-                                    if (search != null)
-                                        matches.Add(search);
-                                }
-                            }
-                        }
-                        foreach (var entry in FMGBank.GetFmgEntriesByType(_activeFmgInfo.EntryCategory, FMGBank.FmgEntryTextType.Summary, false))
-                        {
-                            // Summaries
-                            if (entry.Text != null)
-                            {
-                                if (entry.Text.Contains(_searchFilter, StringComparison.CurrentCultureIgnoreCase))
-                                {
-                                    var search = _entryLabelCache.Find(e => e.ID == entry.ID && !matches.Contains(e));
-                                    if (search != null)
-                                        matches.Add(search);
-                                }
-                            }
-                        }
-                    }
+                    List<FMG.Entry> mainEntries;
+                    if (_searchFilter.Length > _searchFilterCached.Length)
+                        mainEntries = _EntryLabelCacheFiltered;
                     else
-                    {
-                        // Non-grouped entries
-                        List<FMG.Entry> searchEntries;
-                        if (_searchFilter.Length > _searchFilterCached.Length)
-                            searchEntries = _EntryLabelCacheFiltered;
-                        else
-                            searchEntries = _entryLabelCache;
+                        mainEntries = _entryLabelCache;
 
-                        foreach (var entry in searchEntries)
+                    // Title/Textbody
+                    foreach (var entry in mainEntries)
+                    {
+                        if (entry.ID.ToString().Contains(_searchFilter, StringComparison.CurrentCultureIgnoreCase))
                         {
-                            if (entry.ID.ToString().Contains(_searchFilter, StringComparison.CurrentCultureIgnoreCase))
-                            {
-                                // ID search
+                            // ID search
+                            matches.Add(entry);
+                        }
+                        else if (entry.Text != null)
+                        {
+                            // Text search
+                            if (entry.Text.Contains(_searchFilter, StringComparison.CurrentCultureIgnoreCase))
                                 matches.Add(entry);
-                            }
-                            else if (entry.Text != null)
+                        }
+                    }
+
+                    // Descriptions
+                    foreach (var entry in FMGBank.GetFmgEntriesByCategoryAndTextType(_activeFmgInfo.EntryCategory, FMGBank.FmgEntryTextType.Description, false))
+                    {
+                        if (entry.Text != null)
+                        {
+                            if (entry.Text.Contains(_searchFilter, StringComparison.CurrentCultureIgnoreCase))
                             {
-                                // Text search
-                                if (entry.Text.Contains(_searchFilter, StringComparison.CurrentCultureIgnoreCase))
-                                {
-                                    var search = _entryLabelCache.Find(e => e.ID == entry.ID && !matches.Contains(e));
-                                    if (search != null)
-                                        matches.Add(search);
-                                }
+                                var search = _entryLabelCache.Find(e => e.ID == entry.ID && !matches.Contains(e));
+                                if (search != null)
+                                    matches.Add(search);
                             }
                         }
                     }
 
+                    // Summaries
+                    foreach (var entry in FMGBank.GetFmgEntriesByCategoryAndTextType(_activeFmgInfo.EntryCategory, FMGBank.FmgEntryTextType.Summary, false))
+                    {
+                        if (entry.Text != null)
+                        {
+                            if (entry.Text.Contains(_searchFilter, StringComparison.CurrentCultureIgnoreCase))
+                            {
+                                var search = _entryLabelCache.Find(e => e.ID == entry.ID && !matches.Contains(e));
+                                if (search != null)
+                                    matches.Add(search);
+                            }
+                        }
+                    }
+                   
                     _EntryLabelCacheFiltered = matches;
                     _searchFilterCached = _searchFilter;
+                    doFocus = true;
                 }
                 else if (_entryLabelCache != _EntryLabelCacheFiltered && _searchFilter == "")
                 {
@@ -245,14 +217,18 @@ namespace StudioCore.TextEditor
                     && info.UICategory == uiType 
                     && info.EntryType is FMGBank.FmgEntryTextType.Title or FMGBank.FmgEntryTextType.TextBody)
                 {
-                    string displayName;
+                    string displayName = "";
                     if (CFG.Current.FMG_ShowOriginalNames)
                     {
                         displayName = info.FileName;
                     }
                     else
                     {
-                        displayName = info.Name.Replace("Title", "");
+                        if (!CFG.Current.FMG_NoGroupedFmgEntries)
+                            displayName = info.Name.Replace("Title", "");
+                        else
+                            displayName = info.Name;
+
                         displayName = displayName.Replace("Modern_", "");
                     }
                     if (ImGui.Selectable($@" {displayName}", info == _activeFmgInfo))
@@ -279,7 +255,9 @@ namespace StudioCore.TextEditor
                 }
                 else
                 {
-                    ImGui.Text("This editor requires a project with the game unpacked to be loaded.");
+                    ImGui.Text("This Editor requires game to be unpacked");
+                    // Ascii fatcat (IMPORTANT)
+                    ImGui.TextUnformatted("\nPPPPP5555PGGGGGGGBBBBBBGPYJ?????????JJYYYYYY5PPPGGPPPGPPPPPPPPPPPPGGGGGGGGGPPPPPPPPPPPPPPPPPPPPPPPPP\r\nPPPPP5555PGGGGGBBBBBBGGGPYJJ??????JJYY55555Y555PPPPGGGGGGGGGGGGGGGGGPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP\r\nPPPPP555PPGGGGGBBBBBBGGGP5JJ?????JJY55555555YYY555PPPPGGGGGGGPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP\r\nPPPPP555PPGGGGGBBBBBBGBGPYJ?????JJY555555555555555555PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPGPPP\r\nPP55555PPGGGGGGGBBBBBBGGPYJ????JJY555555555555555555555555PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP\r\n555Y55PPGGGGGGGGGGGBBGGG5Y?????JYY5555555P5555P555555555555555PPPPPPPPPPPPPPPPPPGGGGGGGGGPPPPPPPPPPP\r\n555555PPPPPPPPGGGGGBBBBGPJ???JJYY55555555PPPP5555555555555555555PPPPPPPPPPPPPPPPPPPPPPPPPPPPPGGGGGGG\r\nPPPPPPPPPPPGGGGGGGGGBBBBG5YJJJYYYY555555PPP55555555555555555555555PPPPPPPPPGGPPPPPGGGGPPPPPPPPPPPPPP\r\nPPPPPPPGGGGGGGGGGGGBBBBBGP555YYYYYYYYYY55555555555YYYYYYYYY55555555555PPPPPPPPPPPPPPPPPPPPPPPGPPPPPP\r\nPPPPPGGGGGPPPPPPPPGGGGGGPPPP5555YYYYYYYYYY555555YYYYYYYYYY55555YYYYYY5555555555555555555555555555PPP\r\nPPPPPPPPPPPP555555PPPPPPPPPP5555555555YYYYYYYYYYYYYYYYYYYY55YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY\r\n55PPPPPP555555555555555PP55555555555555555YYYYYYYYYYYYYYYYYYYYYYYJJJJJ??JJJJJJ?JJJJJJJJJJJJJJJJJJJJJ\r\nPPPPPPP55555555PP5555555P55555555555555555YYYYYYYYYYYYYYYYJJJJJJJJJ??????????77?????????????????????\r\nPPPPPP5PPPPPPPPPP555555555555555555555555YYYYYYYYYYYYYYYJJ??????????7777777777777?????????7?????????\r\nPPPPPPPPPPPPPPPP55555555555555555555YYYYYYYYYYYYYYYYJJJ???7777777777??7777777777777777????77777?????\r\nGGGGBBBBBBGGGGGGGGGPPPPPPPPP5555555YYYYYYYJJJJJJJJ??????77777777?77??????777777777777777?777777?????\r\nGGGGGGGBBBBBBBBBBBBBBGGGGGPPPPPP5555YYYYJJJJJJ????????7777777?????????????????????7777777777777?????\r\nPPPPPPPPPGGGGGGGGGGBBBBBBBGGPPPPPP555YYYYJJJJJ?????????77777????JJYYYJJJJJ?????????????????777777777\r\nPPP5PPPPPPPPPPPPPPPPPPPGGBBGGGPPPPPP55YYYYYYJJJ??7777????777??JJYY5555YYYYYYYYYYYYYJJJJYJJJJ????????\r\nPPPPPPPPPPPPP5PPPPPP555PPGGGGGPPPPPPP5555YYYJJ???7777?77777???JY555PPPPPPPPPGGGGGGGGGPPPPPPPP555YYYY\r\nPPPPPPPPPPPPP55PPP5555555PPPPPPPPPPPPP555YYJJ????????????777??J5PGGGGGGGGGGGGGGGGBBBBBBBBBBBBBBBBBBB\r\nPPPPPPPPPPPP55555555555PPPPPPPPPPPPPP55YYYYJJJ?????????????77?Y5P555YJJ??JJJJJ??JJJJJJJYYY5555555555\r\nPPP55PPPP5555555555555PPPPPPPPPPPGGPP5YYYYYJJJ????????????777??JJJJ???777777777777777777????????????\r\n555555P55555P55555555PPPPPPPPPPPGGGP55YYYYYJJJJJJJ??JJJ?????????????77777777777777777777777777777777\r\n5555555555PPPP55555PPPPPPPPPPPPPGGPP5YYYYYYJJJJJJJJJJJJJ????????????77777777777777777777777777777777\r\nP5555555555P5555555PPPPPPPPGGGGGGGPP5YYYYYYYYJJJJJYYYYYJJJ??????????77777777777777777777777777777777\r\n555P5555555555555555PPPPPPPGGGGPPPP55YYYYYYYYYYYYYY555YYJJJ????????777777777777777777777777777777777\r\n55555555555555PPP555PPPPPPGGGGGGPPP55YYYYYYYYYYYYYYY55YYJJJ???????7777777777777777777777777777777777\r\nPPPP55PP5555PPPPPPPPPPPPPPPGGGGGGPPP555YYYYYYYYYYY55PP5YJJ???????????7777777777777777777777777777777\r\nPPP555555PPPP55PPPPPPPPPPPGGGGBGGPPPPP555555555PPPGGPP5YJJJJ??????????777777777777777777777777777777\r\nPPPPPPPPPPPPPPPPPPPPPPPPPPGGGGGGGPPPPPPPPPPPPPPPGGGGP55YYYYJJ?????????777777777777777777777777777777\r\nPPPPPPPGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGPPGPPP55YYYYYJJJJ?????????77777777777777777777777777\r\nPPPPPPPPGGGBBBBBBBBBGGGBBBBBBBBBBBBBBBBBBBBGGBBGGGGGGPPP5555YYYYYYYJJJJJJ??????777777777777777777777\r\nPPPPPPPPPPPPPGGBBBGGPPGGBBBBBBBBBBBBBBBBBBBBBBBBBBBGGGGGGGPPPPPPPPP55555YYYYJJJ????77777777777777777\r\nPPPPPPPPPPPPPPPPPPPPPPPPGBBBBBBBBBBBBBBBBBBBBBB##BGGPPGGBBBBGGGGGGGGPPPPPPPP5555YYJJ??????7777777777\r\nPPPPPPPPPPPPPPPPPPP55555PPGGGBBBBBBBBBBBBBBBBBBBGGPPPPGGGGGPPPPPPPPPPP5555555555555YYJJJ????????????\r\nPPPPPPPPPPPPPPPP5PPPPP555PPPPPPPPPPPPPPPPGPPPPPPP555555555555555YYYJJJJJJJJJJJJJJYYYYJJJJJJJJJ??????\r\nPPPPPPPPPPPPPPP555PPPP555555555555555555555555YYYYYYYYYYYJJJJJJJ???777777777777???JJJJJJJJJJJJJJ????\r\nPPP55PPPPP555PP5555555555555555YYYYYYYYYYYYYYJJJJJJJJJJ??????777777777777777777???JJJJJJJJJJJJJJJ???\r\nPPPPPPPP5555555555555555YYYYYYYJJJJJJ????????????????????????????777777777777???JJJJJJJJJJJJJJJJJ???\r\nPPPP5P555555555555555555555YYYYYJJJJJJJJ??????????????????????????????7?????JJJJJJJJJJJJJJJJJJJJJJJJ\r\nPPP55PP55555555555555555555YYYYYYYJJJJJJJJJJJJJJJJ?????????JJJJJJJJ???JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ\r\n555555555555555555555555YYYYYYYYYYYYJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ\r\n55555555555555555555555555555555YYYYYYYYYYYYYYYYYYYYYYYYYYYYYJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ\r\n5555555555555555555555555555555555555555555555555555555YYYYYYYJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ?\r\n55555555555555555555555555555555555555555555555555555555YYYYYYYYYYYYJJJJJJJJJJJJJJJJJJJJJJJJJJJ?????\r\n555555555555555555555555555555555555555555555555555555YYYYYYYYYYYYYYYJJJJJJJJJJJJJJJJJJJJJ??????????");
                 }
                 return;
             }
@@ -333,11 +311,11 @@ namespace StudioCore.TextEditor
             ImGui.SameLine();
 
             // Search
-            if (InputTracker.GetControlShortcut(Key.F))
+            if (InputTracker.GetKeyDown(KeyBindings.Current.TextFMG_Search))
                 ImGui.SetKeyboardFocusHere();
-            ImGui.InputText("Search <Ctrl+F>", ref _searchFilter, 255);
+            ImGui.InputText($"Search <{KeyBindings.Current.TextFMG_Search.HintText}>", ref _searchFilter, 255);
 
-            FMGSearchLogic();
+            FMGSearchLogic(ref doFocus);
 
             ImGui.BeginChild("Text Entry List");
             if (_activeFmgInfo == null)
@@ -359,7 +337,7 @@ namespace StudioCore.TextEditor
                 // Entries
                 foreach (var r in _EntryLabelCacheFiltered)
                 {
-                    var text = (r.Text == null) ? "%null%" : r.Text; 
+                    var text = (r.Text == null) ? "%null%" : r.Text.Replace("\n", "\n".PadRight(r.ID.ToString().Length+2)); 
                     if (ImGui.Selectable($@"{r.ID} {text}", _activeIDCache == r.ID))
                     {
                         _activeEntryGroup = FMGBank.GenerateEntryGroup(r.ID, _activeFmgInfo);
@@ -448,35 +426,48 @@ namespace StudioCore.TextEditor
                 return;
             }
 
+            var scale = ImGuiRenderer.GetUIScale();
+
             // Docking setup
             var wins = ImGui.GetWindowSize();
             var winp = ImGui.GetWindowPos();
-            winp.Y += 20.0f;
-            wins.Y -= 20.0f;
+            winp.Y += 20.0f * scale;
+            wins.Y -= 20.0f * scale;
             ImGui.SetNextWindowPos(winp);
             ImGui.SetNextWindowSize(wins);
 
-            if (!ImGui.IsAnyItemActive())
+            if (!ImGui.IsAnyItemActive() && FMGBank.IsLoaded)
             {
                 // Only allow key shortcuts when an item [text box] is not currently activated
-                if (EditorActionManager.CanUndo() && InputTracker.GetControlShortcut(Key.Z))
+                if (EditorActionManager.CanUndo() && InputTracker.GetKeyDown(KeyBindings.Current.Core_Undo))
                 {
                     EditorActionManager.UndoAction();
                 }
-                if (EditorActionManager.CanRedo() && InputTracker.GetControlShortcut(Key.Y))
+                if (EditorActionManager.CanRedo() && InputTracker.GetKeyDown(KeyBindings.Current.Core_Redo))
                 {
                     EditorActionManager.RedoAction();
                 }
-                if (InputTracker.GetKeyDown(Key.Delete) && _activeEntryGroup != null)
+                if (InputTracker.GetKeyDown(KeyBindings.Current.Core_Delete) && _activeEntryGroup != null)
                 {
                     DeleteFMGEntries(_activeEntryGroup);
                 }
-                if (InputTracker.GetControlShortcut(Key.D) && _activeEntryGroup != null)
+                if (InputTracker.GetKeyDown(KeyBindings.Current.Core_Duplicate) && _activeEntryGroup != null)
                 {
                     DuplicateFMGEntries(_activeEntryGroup);
                 }
+                if (InputTracker.GetKeyDown(KeyBindings.Current.TextFMG_Import))
+                {
+                    if (FMGBank.ImportFMGs())
+                    {
+                        ClearTextEditorCache();
+                        ResetActionManager();
+                    }
+                }
+                if (InputTracker.GetKeyDown(KeyBindings.Current.TextFMG_ExportAll))
+                {
+                    FMGBank.ExportFMGs();
+                }
             }
-
             bool doFocus = false;
             // Parse select commands
             if (initcmd != null && initcmd[0] == "select")
@@ -545,6 +536,7 @@ namespace StudioCore.TextEditor
 
         private void ChangeLanguage(string path)
         {
+            _projectSettings.LastFmgLanguageUsed = path;
             ClearTextEditorCache();
             ResetActionManager();
             FMGBank.ReloadFMGs(path);
@@ -552,9 +544,10 @@ namespace StudioCore.TextEditor
 
         public override void OnProjectChanged(ProjectSettings newSettings)
         {
+            _projectSettings = newSettings;
             ClearTextEditorCache();
             ResetActionManager();
-            FMGBank.ReloadFMGs();
+            FMGBank.ReloadFMGs(_projectSettings.LastFmgLanguageUsed);
         }
 
         public override void Save()

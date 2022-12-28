@@ -2,8 +2,9 @@
 <Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
 
   <PropertyGroup>
-    <TargetFramework>net6.0-windows</TargetFramework>
+    <TargetFramework>net7.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>11</LangVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -251,6 +252,15 @@
     <None Remove="Assets\Shaders\SimpleFlver_selected.frag.spv" />
     <None Remove="Assets\Shaders\SimpleFlver_selected.vert.spv" />
     <None Remove="tracy.dll" />
+    <None Update="Assets\GameOffsets\DS1R\CoreOffsets.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Assets\GameOffsets\DS1R\ItemGibOffsets.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Assets\GameOffsets\DS1R\ParamOffsets.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
