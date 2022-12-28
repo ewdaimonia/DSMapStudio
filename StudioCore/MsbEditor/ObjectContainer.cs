@@ -85,6 +85,17 @@ namespace StudioCore.MsbEditor
             }
         }
 
+        public IEnumerable<Entity> GetObjectsByStartsWithSubstring(string name)
+        {
+            foreach (var m in Objects)
+            {
+                if (m.Name.StartsWith(name))
+                {
+                    yield return m;
+                }
+            }
+        }
+
         public byte GetNextUnique(string prop, byte value)
         {
             HashSet<byte> usedvals = new HashSet<byte>();

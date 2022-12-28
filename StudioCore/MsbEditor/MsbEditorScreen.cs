@@ -349,6 +349,20 @@ namespace StudioCore.MsbEditor
                     var action = new GenerateGridObjectsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, XWidth, YHeight, ZDepth, XIdOffset, YIdOffset, ZIdOffset, XPosOffset, YPosOffset, ZPosOffset);
                     EditorActionManager.ExecuteAction(action);
                 }
+                if (ImGui.MenuItem("Delete Autogenned Entities", "Ctrl+T", false, _selection.IsSelection()))
+                {
+                    var loadedMaps = Universe.LoadedObjectContainers.Values.Where(x => x != null);
+                    if (_createEntityMapIndex >= loadedMaps.Count())
+                        _createEntityMapIndex = 0;
+                    if(loadedMaps.Count() != 0)
+                    {
+                        ImGui.Combo("Target Map", ref _createEntityMapIndex, loadedMaps.Select(e => e.Name).ToArray(), loadedMaps.Count());
+
+                        Map map = (Map)loadedMaps.ElementAt(_createEntityMapIndex);
+                        var action = new DeleteAutogennedEntities(Universe, map);
+                        EditorActionManager.ExecuteAction(action);
+                    }
+                }
 
                 if (ImGui.BeginMenu("Dummify/Un-Dummify"))
                 {

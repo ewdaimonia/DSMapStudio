@@ -450,7 +450,7 @@ namespace StudioCore.MsbEditor
                                         id++;
                                         newid = id.ToString("D" + idstring.Length.ToString());
                                     }
-                                    newobj.Name = Clonables[i].Name.Substring(0, Clonables[i].Name.Length - idstring.Length) + newid;
+                                    newobj.Name = "AUTOGEN" + Clonables[i].Name.Substring(0, Clonables[i].Name.Length - idstring.Length) + newid;
                                     objectnames[Clonables[i].MapID].Add(newobj.Name);
 
                                     if(((MSBE.Part)newobj.WrappedObject).EntityID != 0 && ((MSBE.Part)newobj.WrappedObject).EntityID != -1)
@@ -473,7 +473,7 @@ namespace StudioCore.MsbEditor
                                         id++;
                                         newid = id.ToString("D" + idstring.Length.ToString());
                                     }
-                                    newobj.Name = Clonables[i].Name + "_" + newid;
+                                    newobj.Name = "AUTOGEN" + Clonables[i].Name + "_" + newid ;
                                     objectnames[Clonables[i].MapID].Add(newobj.Name);
                                 }
 
@@ -623,6 +623,73 @@ namespace StudioCore.MsbEditor
             {
                 Universe.Selection.ClearSelection();
             }
+            return ActionEvent.ObjectAddedRemoved;
+        }
+    }
+
+    public class DeleteAutogennedEntities : Action
+    {
+        private Universe Universe;
+        private Scene.RenderScene Scene;
+        private Map Map;
+        private List<int> RemoveIndices = new List<int>();
+        private List<ObjectContainer> RemoveMaps = new List<ObjectContainer>();
+        private List<MapEntity> RemoveParent = new List<MapEntity>();
+        private List<int> RemoveParentIndex = new List<int>();
+        private bool SetSelection;
+
+        private static Regex TrailIDRegex = new Regex(@"_(?<id>\d+)$");
+
+        public DeleteAutogennedEntities(Universe univ, Map map)
+        {
+            Universe = univ;
+            Map = map;
+        }
+
+        public override ActionEvent Execute()
+        {
+            List<Entity> Deletables = Map.GetObjectsByStartsWithSubstring("AUTOGEN").ToList();
+            foreach (var obj in Deletables)
+            {
+                var m = Universe.GetLoadedMap(((MapEntity)obj).MapID);
+                if (m != null)
+                {
+                    RemoveMaps.Add(m);
+                    m.HasUnsavedChanges = true;
+                    RemoveIndices.Add(m.Objects.IndexOf(obj));
+                    m.Objects.RemoveAt(RemoveIndices.Last());
+                    if (obj.RenderSceneMesh != null)
+                    {
+                        obj.RenderSceneMesh.AutoRegister = false;
+                        obj.RenderSceneMesh.UnregisterWithScene();
+                    }
+                    RemoveParent.Add((MapEntity)obj.Parent);
+                    if (obj.Parent != null)
+                    {
+                        RemoveParentIndex.Add(obj.Parent.RemoveChild(obj));
+                    }
+                    else
+                    {
+                        RemoveParentIndex.Add(-1);
+                    }
+                }
+                else
+                {
+                    RemoveMaps.Add(null);
+                    RemoveIndices.Add(-1);
+                    RemoveParent.Add(null);
+                    RemoveParentIndex.Add(-1);
+                }
+            }
+            if (SetSelection)
+            {
+                Universe.Selection.ClearSelection();
+            }
+            return ActionEvent.ObjectAddedRemoved;
+        }
+
+        public override ActionEvent Undo()
+        {
             return ActionEvent.ObjectAddedRemoved;
         }
     }

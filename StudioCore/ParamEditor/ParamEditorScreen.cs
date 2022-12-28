@@ -264,6 +264,17 @@ namespace StudioCore.ParamEditor
                 {
                     EditorCommandQueue.AddCommand($@"param/menu/massEditRegex");
                 }
+                if (ImGui.MenuItem("Random Generate Characters"))
+                {
+                    try
+                    {
+                        EditorActionManager.ExecuteAction(ParamBank.PrimaryBank.GenerateRandomCharacters());
+                    }
+                    catch(Exception e)
+                    {
+                        System.Diagnostics.Debug.WriteLine(e);
+                    }
+                }
                 if (ImGui.BeginMenu("Export CSV", _activeView._selection.rowSelectionExists()))
                 {
                     DelimiterInputText();
