@@ -166,22 +166,55 @@ namespace StudioCore.ParamEditor
             Param.Row minMaleFaceBase = new Param.Row(patchesBase);
             Param.Row minFemaleFaceBase = new Param.Row(ryaBase);
 
+            List<Param.Row> maleFacePool = this._params["FaceParam"].Rows
+                        .Where((Param.Row curr) =>
+                        curr.ID >= 23000
+                        && curr.ID < 30000
+                        && (Byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == "gender").Value < (Byte)128).ToList();
+            List <Param.Row> femaleFacePool = this._params["FaceParam"].Rows
+                        .Where((Param.Row curr) =>
+                        curr.ID >= 23000
+                        && curr.ID < 30000
+                        && (Byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == "beard_partsId").Value == (Byte)0
+                        && (Byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == "gender").Value >= (Byte)128).ToList();
+
             List<string> forbiddenParams = new List<string>()
             {
                 "ID","Name","pad","pad2","skin_color_R","skin_color_G","skin_color_B"
                 ,"hair_color_R","hair_color_G","hair_color_B"
+                ,"body_hairColor_R","body_hairColor_G","body_hairColor_B"
+                ,"beard_color_R","beard_color_G","beard_color_B"
+                ,"eyebrow_color_R","eyebrow_color_G","eyebrow_color_B"
+                ,"eyelash_color_R","eyelash_color_G","eyelash_color_B"
+                ,"face_aroundEyeColor_R","face_aroundEyeColor_G","face_aroundEyeColor_B"
+                ,"face_cheekColor_R","face_cheekColor_G","face_cheekColor_B"
+                ,"face_eyeLineColor_R","face_eyeLineColor_G","face_eyeLineColor_B"
+                ,"face_eyeShadowDownColor_R","face_eyeShadowDownColor_G","face_eyeShadowDownColor_B"
+                ,"face_eyeShadowUpColor_R","face_eyeShadowUpColor_G","face_eyeShadowUpColor_B"
+                ,"face_lipColor_R","face_lipColor_G","face_lipColor_B"
+                //Right
+                ,"eyeR_irisColor_R","eyeR_irisColor_G","eyeR_irisColor_B"
+                ,"eyeR_cataractColor_R","eyeR_cataractColor_G","eyeR_cataractColor_B"
+                ,"eyeR_scleraColor_R","eyeR_scleraColor_G","eyeR_scleraColor_B"
+                //Left
+                ,"eyeL_irisColor_R","eyeL_irisColor_G","eyeL_irisColor_B"
+                ,"eyeL_cataractColor_R","eyeL_cataractColor_G","eyeL_cataractColor_B"
+                ,"eyeL_scleraColor_R","eyeL_scleraColor_G","eyeL_scleraColor_B",
+                //Age
+                "age",
+                "gender",
+                "face_partsId",
+                "hair_partsId",
+                "beard_partsId",
             };
             foreach (Param.Cell _cell in minMaleFaceBase.CellHandles)
             {
                 if (!forbiddenParams.Contains(_cell.Def.InternalName))
                 {
-                    Param.Row _val = this._params["FaceParam"].Rows
-                        .Aggregate(patchesBase, (Param.Row agg, Param.Row curr) => 
-                        curr.ID >= 23000
-                        && curr.ID < 30000 
-                        && (Byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == "gender").Value < (Byte)128 ?
-                        (Byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value < (Byte)agg.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value 
-                        ? curr : agg : agg);
+                    Param.Row _val = maleFacePool.Aggregate(patchesBase, (Param.Row agg, Param.Row curr) => 
+                        (Byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value 
+                        < (Byte)agg.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value 
+                        ? curr : agg);
 
                     _cell.SetValue((Byte)_val.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value);
                 }
@@ -190,13 +223,10 @@ namespace StudioCore.ParamEditor
             {
                 if (!forbiddenParams.Contains(_cell.Def.InternalName))
                 {
-                    Param.Row _val = this._params["FaceParam"].Rows
-                        .Aggregate(ryaBase, (Param.Row agg, Param.Row curr) =>
-                        curr.ID >= 23000
-                        && curr.ID < 30000
-                        && (Byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == "gender").Value >= (Byte)128 ? 
-                        (Byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value < (Byte)agg.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value 
-                        ? curr : agg : agg);
+                    Param.Row _val = femaleFacePool.Aggregate(ryaBase, (Param.Row agg, Param.Row curr) =>
+                        (Byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value
+                        < (Byte)agg.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value
+                        ? curr : agg);
 
                     _cell.SetValue((Byte)_val.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value);
                 }
@@ -206,13 +236,10 @@ namespace StudioCore.ParamEditor
             {
                 if (!forbiddenParams.Contains(_cell.Def.InternalName))
                 {
-                    Param.Row _val = this._params["FaceParam"].Rows
-                        .Aggregate(patchesBase, (Param.Row agg, Param.Row curr) =>
-                        curr.ID >= 23000
-                        && curr.ID < 30000
-                        && (Byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == "gender").Value < (Byte)128 ? 
-                        (Byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value > (Byte)agg.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value 
-                        ? curr : agg : agg);
+                    Param.Row _val = maleFacePool.Aggregate(patchesBase, (Param.Row agg, Param.Row curr) =>
+                        (Byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value
+                        > (Byte)agg.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value
+                        ? curr : agg);
 
                     _cell.SetValue((Byte)_val.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value);
                 }
@@ -222,13 +249,10 @@ namespace StudioCore.ParamEditor
             {
                 if (!forbiddenParams.Contains(_cell.Def.InternalName))
                 {
-                    Param.Row _val = this._params["FaceParam"].Rows
-                        .Aggregate(ryaBase, (Param.Row agg, Param.Row curr) =>
-                        curr.ID >= 23000
-                        && curr.ID < 30000
-                        && (Byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == "gender").Value >= (Byte)128 ? 
-                        (Byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value > (Byte)agg.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value 
-                        ? curr : agg : agg);
+                    Param.Row _val = femaleFacePool.Aggregate(ryaBase, (Param.Row agg, Param.Row curr) =>
+                        (Byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value
+                        > (Byte)agg.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value
+                        ? curr : agg);
 
                     _cell.SetValue((Byte)_val.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName).Value);
                 }
@@ -238,9 +262,9 @@ namespace StudioCore.ParamEditor
             List<EditorAction> actions = new List<EditorAction>();
             for (int i = 0; i < 15; i++)
             {
-                Byte bodyType = (Byte)RollDice(1, 1, 0);
+                Byte bodyType = (Byte)RollDice(2, 1, 0);
 
-                Param.Row newFace = GenerateFaceParam(bodyType == 1 ? patchesBase : ryaBase, bodyType == 1 ? minMaleFaceBase : minFemaleFaceBase, bodyType == 1 ? maxMaleFaceBase : maxFemaleFaceBase, bodyType, i);
+                Param.Row newFace = GenerateFaceParam(bodyType == 1 ? patchesBase : ryaBase, bodyType == 1 ? minMaleFaceBase : minFemaleFaceBase, bodyType == 1 ? maxMaleFaceBase : maxFemaleFaceBase, bodyType == 1 ? maleFacePool : femaleFacePool, bodyType, i);
                 Param.Row newChar = GenerateCharInit(wretchBase, bodyType, newFace.ID, i);
 
                 newCharInits.Add(newChar);
@@ -253,7 +277,7 @@ namespace StudioCore.ParamEditor
             return new CompoundAction(actions);
         }
 
-        private Param.Row GenerateFaceParam(Param.Row baseFace, Param.Row minFaceBase, Param.Row maxFaceBase, Byte bodyType, int i)
+        private Param.Row GenerateFaceParam(Param.Row baseFace, Param.Row minFaceBase, Param.Row maxFaceBase, List<Param.Row> facePool, Byte bodyType, int i)
         {
             Param.Row newFace = new Param.Row(baseFace);
             List<string> forbiddenParams = new List<string>()
@@ -264,32 +288,81 @@ namespace StudioCore.ParamEditor
                 ,"beard_color_R","beard_color_G","beard_color_B"
                 ,"eyebrow_color_R","eyebrow_color_G","eyebrow_color_B"
                 ,"eyelash_color_R","eyelash_color_G","eyelash_color_B"
+                ,"face_aroundEyeColor_R","face_aroundEyeColor_G","face_aroundEyeColor_B"
+                ,"face_cheekColor_R","face_cheekColor_G","face_cheekColor_B"
+                ,"face_eyeLineColor_R","face_eyeLineColor_G","face_eyeLineColor_B"
+                ,"face_eyeShadowDownColor_R","face_eyeShadowDownColor_G","face_eyeShadowDownColor_B"
+                ,"face_eyeShadowUpColor_R","face_eyeShadowUpColor_G","face_eyeShadowUpColor_B"
+                ,"face_lipColor_R","face_lipColor_G","face_lipColor_B"
+                //Right
+                ,"eyeR_irisColor_R","eyeR_irisColor_G","eyeR_irisColor_B"
+                ,"eyeR_cataractColor_R","eyeR_cataractColor_G","eyeR_cataractColor_B"
+                ,"eyeR_scleraColor_R","eyeR_scleraColor_G","eyeR_scleraColor_B"
+                //Left
+                ,"eyeL_irisColor_R","eyeL_irisColor_G","eyeL_irisColor_B"
+                ,"eyeL_cataractColor_R","eyeL_cataractColor_G","eyeL_cataractColor_B"
+                ,"eyeL_scleraColor_R","eyeL_scleraColor_G","eyeL_scleraColor_B",
+                //Age
+                "age",
+                "gender",
+                "face_partsId",
+                "hair_partsId",
+                "beard_partsId",
             };
 
-            Param.Row randomSkinColor = this._params["FaceParam"].Rows[RollDice(this._params["FaceParam"].Rows.Count, 1, 0)];
+            Param.Row randomSkinColor = facePool[RollDice(facePool.Count, 1, 0)];
             newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "skin_color_R").SetValue(randomSkinColor.CellHandles.FirstOrDefault(c => c.Def.InternalName == "skin_color_R").Value);
             newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "skin_color_G").SetValue(randomSkinColor.CellHandles.FirstOrDefault(c => c.Def.InternalName == "skin_color_G").Value);
             newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "skin_color_B").SetValue(randomSkinColor.CellHandles.FirstOrDefault(c => c.Def.InternalName == "skin_color_B").Value);
-            Param.Row randomHairColor = this._params["FaceParam"].Rows[RollDice(this._params["FaceParam"].Rows.Count, 1, 0)];
+            Param.Row randomHairColor = facePool[RollDice(facePool.Count, 1, 0)];
             Byte hairR = (Byte)randomHairColor.CellHandles.FirstOrDefault(c => c.Def.InternalName == "hair_color_R").Value;
             Byte hairG = (Byte)randomHairColor.CellHandles.FirstOrDefault(c => c.Def.InternalName == "hair_color_G").Value;
             Byte hairB = (Byte)randomHairColor.CellHandles.FirstOrDefault(c => c.Def.InternalName == "hair_color_B").Value;
-            newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "hair_color_R").SetValue(hairR);
-            newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "hair_color_G").SetValue(hairG);
-            newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "hair_color_B").SetValue(hairB);
-            newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "body_hairColor_R").SetValue(hairR);
-            newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "body_hairColor_G").SetValue(hairG);
-            newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "body_hairColor_B").SetValue(hairB);
-            newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "beard_color_R").SetValue(hairR);
-            newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "beard_color_G").SetValue(hairG);
-            newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "beard_color_B").SetValue(hairB);
-            newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "eyebrow_color_R").SetValue(hairR);
-            newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "eyebrow_color_G").SetValue(hairG);
-            newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "eyebrow_color_B").SetValue(hairB);
-            newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "eyelash_color_R").SetValue(hairR);
-            newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "eyelash_color_G").SetValue(hairG);
-            newFace.CellHandles.FirstOrDefault(c => c.Def.InternalName == "eyelash_color_B").SetValue(hairB);
+            MultiValueAssign(hairR, newFace, new string[] { "hair_color_R", "body_hairColor_R", "beard_color_R", "eyebrow_color_R", "eyelash_color_R" });
+            MultiValueAssign(hairG, newFace, new string[] { "hair_color_G", "body_hairColor_G", "beard_color_G", "eyebrow_color_G", "eyelash_color_G" });
+            MultiValueAssign(hairB, newFace, new string[] { "hair_color_B", "body_hairColor_B", "beard_color_B", "eyebrow_color_B", "eyelash_color_B" });
 
+            Param.Row randomFaceParts = facePool[RollDice(facePool.Count, 1, 0)];
+            MultiValueAssign(randomFaceParts, newFace, new string[] { "face_partsId" });
+
+            Param.Row randomAge = facePool[RollDice(facePool.Count, 1, 0)];
+            MultiValueAssign(randomAge, newFace, new string[] { "age" });
+
+            Param.Row randomGender = facePool[RollDice(facePool.Count, 1, 0)];
+            MultiValueAssign(randomGender, newFace, new string[] { "gender" });
+
+            Param.Row randomEyes = facePool[RollDice(facePool.Count, 1, 0)];
+            MultiValueAssign(randomEyes, newFace, new string[] {                 
+                "eyeR_irisColor_R","eyeR_irisColor_G","eyeR_irisColor_B"
+                ,"eyeR_cataractColor_R","eyeR_cataractColor_G","eyeR_cataractColor_B"
+                ,"eyeR_scleraColor_R","eyeR_scleraColor_G","eyeR_scleraColor_B"
+                ,"eyeL_irisColor_R","eyeL_irisColor_G","eyeL_irisColor_B"
+                ,"eyeL_cataractColor_R","eyeL_cataractColor_G","eyeL_cataractColor_B"
+                ,"eyeL_scleraColor_R","eyeL_scleraColor_G","eyeL_scleraColor_B" });
+
+            Param.Row randomCheeks = facePool[RollDice(facePool.Count, 1, 0)];
+            MultiValueAssign(randomCheeks, newFace, new string[] {
+                "face_cheekColor_R","face_cheekColor_G","face_cheekColor_B"
+                ,"face_lipColor_R","face_lipColor_G","face_lipColor_B" });
+
+            Param.Row randomHair = facePool[RollDice(facePool.Count, 1, 0)];
+            MultiValueAssign(randomHair, newFace, new string[] {
+                "hair_partsId" });
+
+            if(bodyType == 1)
+            {
+                Param.Row randomBeard = facePool[RollDice(facePool.Count, 1, 0)];
+                MultiValueAssign(randomBeard, newFace, new string[] {
+                "beard_partsId" });
+            }
+
+            Param.Row randomShadow = facePool[RollDice(facePool.Count, 1, 0)];
+            MultiValueAssign(randomShadow, newFace, new string[] {
+                "face_aroundEyeColor_R","face_aroundEyeColor_G","face_aroundEyeColor_B"
+                ,"face_eyeLineColor_R","face_eyeLineColor_G","face_eyeLineColor_B"
+                ,"face_eyeShadowDownColor_R","face_eyeShadowDownColor_G","face_eyeShadowDownColor_B"
+                ,"face_eyeShadowUpColor_R","face_eyeShadowUpColor_G","face_eyeShadowUpColor_B"
+                });
 
             foreach (Param.Cell _cell in newFace.CellHandles)
             {
@@ -298,7 +371,7 @@ namespace StudioCore.ParamEditor
                     Param.Cell _minVal = minFaceBase.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName);
                     Param.Cell _maxVal = maxFaceBase.CellHandles.FirstOrDefault(c => c.Def.InternalName == _cell.Def.InternalName);
 
-                    Byte _randVal = Convert.ToByte(RollDice(Convert.ToInt32(_maxVal.Value), 1, Convert.ToInt32(_minVal.Value)));
+                    Byte _randVal = Convert.ToByte(RollDice(Convert.ToInt32(_maxVal.Value)+1, 1, Convert.ToInt32(_minVal.Value)));
 
                     _cell.SetValue(_randVal);
                 }
@@ -310,19 +383,35 @@ namespace StudioCore.ParamEditor
             return newFace;
         }
 
+        private void MultiValueAssign(Param.Row fromRow, Param.Row toRow, string[] args)
+        {
+            foreach(string arg in args)
+            {
+                toRow.CellHandles.FirstOrDefault(c => c.Def.InternalName == arg).SetValue(fromRow.CellHandles.FirstOrDefault(c => c.Def.InternalName == arg).Value);
+            }
+        }
+
+        private void MultiValueAssign(Byte val, Param.Row toRow, string[] args)
+        {
+            foreach (string arg in args)
+            {
+                toRow.CellHandles.FirstOrDefault(c => c.Def.InternalName == arg).SetValue(val);
+            }
+        }
+
         private Param.Row GenerateCharInit(Param.Row wretchBase, Byte bodyType, int faceParamId, int i)
         {
             Param.Row newChar = new Param.Row(wretchBase);
             Dictionary<string, int> stats = new Dictionary<string, int>()
                 {
-                    { "baseVit", RollDice(6, 4) },
-                    { "baseWil", RollDice(6, 4) },
-                    { "baseEnd", RollDice(6, 4) },
-                    { "baseStr", RollDice(6, 4) },
-                    { "baseDex", RollDice(6, 4) },
-                    { "baseMag", RollDice(6, 4) },
-                    { "baseFai", RollDice(6, 4) },
-                    { "baseLuc", RollDice(6, 4) },
+                    { "baseVit", RollDice(7, 4) },
+                    { "baseWil", RollDice(7, 4) },
+                    { "baseEnd", RollDice(7, 4) },
+                    { "baseStr", RollDice(7, 4) },
+                    { "baseDex", RollDice(7, 4) },
+                    { "baseMag", RollDice(7, 4) },
+                    { "baseFai", RollDice(7, 4) },
+                    { "baseLuc", RollDice(7, 4) },
                 };
             //Stats
             foreach (KeyValuePair<string, int> stat in stats)
@@ -408,6 +497,24 @@ namespace StudioCore.ParamEditor
             {
                 Param.Row seal = sealPool[RollDice(sealPool.Count, 1, 0)];
                 newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Subwep_Left").SetValue(seal.ID);
+
+                //if player has seal, give incants
+                List<Param.Row> incantPool = this._params["Magic"].Rows.Where(w =>
+                    w.ID < 8000
+                    && w.ID >= 6000
+                    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementIntellect").Value <= (Byte)stats["baseMag"]
+                    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementFaith").Value <= (Byte)stats["baseFai"]
+                    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementLuck").Value <= (Byte)stats["baseLuc"]
+                    ).ToList();
+
+                if (incantPool.Count > 1)
+                {
+                    Param.Row inc1 = incantPool[RollDice(incantPool.Count, 1, 0)];
+                    Param.Row inc2 = incantPool[RollDice(incantPool.Count, 1, 0)];
+
+                    newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Spell_01").SetValue(inc1.ID);
+                    newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Spell_02").SetValue(inc2.ID);
+                }
             }
 
             List<Param.Row> staffPool = this._params["EquipParamWeapon"].Rows.Where(w =>
@@ -426,6 +533,24 @@ namespace StudioCore.ParamEditor
             {
                 Param.Row staff = staffPool[RollDice(staffPool.Count, 1, 0)];
                 newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Subwep_Right").SetValue(staff.ID);
+
+                //if player has staff, give spells
+                List<Param.Row> spellPool = this._params["Magic"].Rows.Where(w =>
+                    w.ID >= 4000
+                    && w.ID < 6000
+                    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementIntellect").Value <= (Byte)stats["baseMag"]
+                    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementFaith").Value <= (Byte)stats["baseFai"]
+                    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementLuck").Value <= (Byte)stats["baseLuc"]
+                    ).ToList();
+
+                if (spellPool.Count > 1)
+                {
+                    Param.Row spl1 = spellPool[RollDice(spellPool.Count, 1, 0)];
+                    Param.Row spl2 = spellPool[RollDice(spellPool.Count, 1, 0)];
+
+                    newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Spell_03").SetValue(spl1.ID);
+                    newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Spell_04").SetValue(spl2.ID);
+                }
             }
 
             if (runningEquipLoad > 5)
@@ -516,7 +641,7 @@ namespace StudioCore.ParamEditor
             return newChar;
         }
 
-        private int RollDice(int max = 0, int numDice = 1, int min = 1)
+        private int RollDice(int max = 6, int numDice = 1, int min = 1)
         {
             Random rnd = new Random();
             int total = 0;

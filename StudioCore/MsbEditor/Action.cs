@@ -399,7 +399,7 @@ namespace StudioCore.MsbEditor
                         objectnames[Clonables[i].MapID].Add(newobj.Name);
                         if (IncrementAmount != null)
                         {
-                            ((MSBE.Part)newobj.WrappedObject).EntityID = ((MSBE.Part)newobj.WrappedObject).EntityID + IncrementAmount.Value;
+                            ((MSBE.Part)newobj.WrappedObject).EntityID = Convert.ToUInt32(((MSBE.Part)newobj.WrappedObject).EntityID + IncrementAmount.Value);
                         }
                     }
                     else
@@ -583,7 +583,7 @@ namespace StudioCore.MsbEditor
 
                                     if(((MSBE.Part)newobj.WrappedObject).EntityID != 0 && ((MSBE.Part)newobj.WrappedObject).EntityID != -1)
                                     {
-                                        ((MSBE.Part)newobj.WrappedObject).EntityID = ((MSBE.Part)newobj.WrappedObject).EntityID + (x * XIdOffset) + (y * YIdOffset) + (z * ZIdOffset);
+                                        ((MSBE.Part)newobj.WrappedObject).EntityID = Convert.ToUInt32(((MSBE.Part)newobj.WrappedObject).EntityID + (x * XIdOffset) + (y * YIdOffset) + (z * ZIdOffset));
                                     }
                                     ((MSBE.Part)newobj.WrappedObject).Position = new System.Numerics.Vector3(
                                         ((MSBE.Part)newobj.WrappedObject).Position.X + (x * XPosOffset),
