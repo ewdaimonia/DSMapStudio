@@ -315,6 +315,17 @@ namespace StudioCore.ParamEditor
                         System.Diagnostics.Debug.WriteLine(e);
                     }
                 }
+                if (ImGui.MenuItem("Generate Navmeshwork Arounds"))
+                {
+                    try
+                    {
+                        EditorActionManager.ExecuteAction(ParamBank.PrimaryBank.GenerateNavmeshWorkArounds());
+                    }
+                    catch (Exception e)
+                    {
+                        System.Diagnostics.Debug.WriteLine(e);
+                    }
+                }
                 if (ImGui.BeginMenu("Export CSV", _activeView._selection.rowSelectionExists()))
                 {
                     DelimiterInputText();

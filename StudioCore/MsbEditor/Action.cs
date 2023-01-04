@@ -549,7 +549,7 @@ namespace StudioCore.MsbEditor
                         for (int i = 0; i < Clonables.Count(); i++)
                         {
                             var m = Universe.GetLoadedMap(Clonables[i].MapID);
-                            if (m != null)
+                            if (m != null && !(y == 0 && x == 0 && z == 0))
                             {
                                 // Get list of names that exist so our duplicate names don't trample over them
                                 if (!objectnames.ContainsKey(Clonables[i].MapID))
