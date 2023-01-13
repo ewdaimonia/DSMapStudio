@@ -738,6 +738,132 @@ namespace StudioCore.ParamEditor
             return newChar;
         }
 
+        public CompoundAction CreateRandomDropItemLots()
+        {
+            List<Param.Row> newItemLots = new List<Param.Row>();
+
+            Param.Row templateItemLotParam = new Param.Row(this._params["ItemLotParam_map"].Rows.FirstOrDefault(c=>c.ID == 997400));
+
+            List<Param.Row> smithingPool = this._params["EquipParamGoods"].Rows.Where(w =>
+                (w.ID >= 10100 && w.ID < 10108)
+                || w.ID == 10140
+                || (w.ID >= 10160 && w.ID < 10169)
+                || w.ID == 10200
+                ).ToList();
+
+            List<Param.Row> weaponPool = this._params["EquipParamWeapon"].Rows.Where(w =>
+                (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "isCustom").Value == 1
+                && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 9999999
+                && ((Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 0 
+                || (Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 2200)
+                ).OrderBy(o=> (byte)o.CellHandles.FirstOrDefault(c => c.Def.InternalName == "rarity").Value).ToList();
+
+            List<Param.Row> armorPool = this._params["EquipParamProtector"].Rows.Where(w =>
+                (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 99999
+                && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 999999
+                ).OrderBy(o => (byte)o.CellHandles.FirstOrDefault(c => c.Def.InternalName == "rarity").Value).ToList();
+
+            List<Param.Row> spellPool = this._params["EquipParamGoods"].Rows.Where(w =>
+                w.ID >= 4000
+                && w.ID < 6000
+                ).OrderBy(o => (byte)o.CellHandles.FirstOrDefault(c => c.Def.InternalName == "rarity").Value).ToList();
+
+            List<Param.Row> incantPool = this._params["EquipParamGoods"].Rows.Where(w =>
+                w.ID >= 6000
+                && w.ID < 8000
+                ).OrderBy(o => (byte)o.CellHandles.FirstOrDefault(c => c.Def.InternalName == "rarity").Value).ToList();
+
+            int i = 0;
+
+            foreach (Param.Row curr in smithingPool)
+            {
+                Param.Row newLot = new Param.Row(templateItemLotParam);
+                newLot.ID = 7600000 + i * 10;
+                newLot.Name = $"AUTOGENNED {curr.Name}";
+                newLot.CellHandles.FirstOrDefault(c => c.Def.InternalName == "lotItemId01").SetValue(curr.ID);
+                newItemLots.Add(newLot);
+                i++;
+            }
+
+            i = 0;
+
+            foreach (Param.Row curr in weaponPool)
+            {
+                Param.Row newLot = new Param.Row(templateItemLotParam);
+                newLot.ID = 7610000 + i * 10;
+                newLot.Name = $"AUTOGENNED Tier {(byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == "rarity").Value} {curr.Name}";
+                newLot.CellHandles.FirstOrDefault(c => c.Def.InternalName == "lotItemId01").SetValue(curr.ID);
+                newLot.CellHandles.FirstOrDefault(c => c.Def.InternalName == "lotItemCategory01").SetValue(2);
+                newItemLots.Add(newLot);
+                i++;
+            }
+
+            i = 0;
+
+            foreach (Param.Row curr in armorPool)
+            {
+                Param.Row newLot = new Param.Row(templateItemLotParam);
+                newLot.ID = 7620000 + i * 10;
+                newLot.Name = $"AUTOGENNED Tier {(byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == "rarity").Value} {curr.Name}";
+                newLot.CellHandles.FirstOrDefault(c => c.Def.InternalName == "lotItemId01").SetValue(curr.ID);
+                newLot.CellHandles.FirstOrDefault(c => c.Def.InternalName == "lotItemCategory01").SetValue(3);
+                newItemLots.Add(newLot);
+                i++;
+            }
+
+            i = 0;
+
+            foreach (Param.Row curr in incantPool)
+            {
+                Param.Row newLot = new Param.Row(templateItemLotParam);
+                newLot.ID = 7630000 + i * 10;
+                newLot.Name = $"AUTOGENNED Tier {(byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == "rarity").Value} {curr.Name}";
+                newLot.CellHandles.FirstOrDefault(c => c.Def.InternalName == "lotItemId01").SetValue(curr.ID);
+                newItemLots.Add(newLot);
+                i++;
+            }
+
+            i = 0;
+
+            foreach (Param.Row curr in spellPool)
+            {
+                Param.Row newLot = new Param.Row(templateItemLotParam);
+                newLot.ID = 7640000 + i * 10;
+                newLot.Name = $"AUTOGENNED Tier {(byte)curr.CellHandles.FirstOrDefault(c => c.Def.InternalName == "rarity").Value} {curr.Name}";
+                newLot.CellHandles.FirstOrDefault(c => c.Def.InternalName == "lotItemId01").SetValue(curr.ID);
+                newItemLots.Add(newLot);
+                i++;
+            }
+
+            this._params["ItemLotParam_map"].Rows = this._params["ItemLotParam_map"].Rows.AsQueryable().Concat(newItemLots).ToList().AsReadOnly();
+
+            List<EditorAction> actions = new List<EditorAction>();
+            return new CompoundAction(actions);
+        }
+
+        public CompoundAction CreateSTScaling()
+        {
+            List<Param.Row> newScalings = new List<Param.Row>();
+
+            Param.Row templateScaling = new Param.Row(this._params["SpEffectParam"].Rows.FirstOrDefault(c => c.ID == 7680));
+
+            templateScaling.CellHandles.FirstOrDefault(c=>c.Def.InternalName == "bGameClearBonus").SetValue((byte)0);
+
+            for(int i = 0; i < 25; i++)
+            {
+                Param.Row newScaling = new Param.Row(templateScaling);
+                newScaling.ID = 6307000 + i;
+                newScaling.Name = $"AUTOGENNED ST SCALING - {i}";
+                newScalings.Add(newScaling);
+                i++;
+            }
+
+            this._params["SpEffectParam"].Rows = this._params["SpEffectParam"].Rows.AsQueryable().Concat(newScalings).ToList().AsReadOnly();
+
+            List<EditorAction> actions = new List<EditorAction>();
+            return new CompoundAction(actions);
+        }
+
         private int RollDice(int max = 6, int numDice = 1, int min = 1)
         {
             Random rnd = new Random();
