@@ -315,6 +315,17 @@ namespace StudioCore.ParamEditor
                         System.Diagnostics.Debug.WriteLine(e);
                     }
                 }
+                if (ImGui.MenuItem("Mass Edits for Pocket Ring"))
+                {
+                    try
+                    {
+                        EditorActionManager.ExecuteAction(ParamBank.PrimaryBank.PocketRingMassEnemyUpdate());
+                    }
+                    catch (Exception e)
+                    {
+                        System.Diagnostics.Debug.WriteLine(e);
+                    }
+                }
                 if (ImGui.MenuItem("Generate Navmeshwork Arounds"))
                 {
                     try

@@ -57,6 +57,7 @@ namespace StudioCore.MsbEditor
         private float XPosOffset = 0;
         private float YPosOffset = 0;
         private float ZPosOffset = 0;
+        private int IsOverworld = 0;
 
         private static object _lock_PauseUpdate = new object();
         private bool _PauseUpdate;
@@ -494,9 +495,13 @@ namespace StudioCore.MsbEditor
                 {
                     this.ZPosOffset = ZPosOffset;
                 }
+                if (ImGui.InputInt("Is overworld?", ref IsOverworld, 1, 10))
+                {
+                    this.IsOverworld = IsOverworld;
+                }
                 if (ImGui.MenuItem("Generate Grid Dungeon", "Ctrl+J", false, _selection.IsSelection()))
                 {
-                    var action = new GenerateGridObjectsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, XWidth, YHeight, ZDepth, XIdOffset, YIdOffset, ZIdOffset, XPosOffset, YPosOffset, ZPosOffset);
+                    var action = new GenerateGridObjectsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, XWidth, YHeight, ZDepth, XIdOffset, YIdOffset, ZIdOffset, XPosOffset, YPosOffset, ZPosOffset, IsOverworld);
                     EditorActionManager.ExecuteAction(action);
                 }
                 if (ImGui.MenuItem("Delete Autogenned Entities", "Ctrl+T", false, _selection.IsSelection()))

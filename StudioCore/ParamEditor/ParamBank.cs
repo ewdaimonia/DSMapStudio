@@ -157,6 +157,36 @@ namespace StudioCore.ParamEditor
             return new CompoundAction(actions);
         }
 
+        public CompoundAction PocketRingMassEnemyUpdate()
+        {
+            List<EditorAction> actions = new List<EditorAction>();
+
+            List<Param.Row> newNpcParams = new List<Param.Row>();
+
+            foreach (Param.Row curr in this._params["SpEffectParam"].Rows)
+            {
+                if (curr.ID >= 26500000 && curr.ID < 200000000 && curr.ID % 2 == 0)//!curr.Name.Contains("Speshel")
+                {
+                    string name = curr.Name;
+                    foreach(Param.Row npcCurr in this._params["NpcParam"].Rows)
+                    {
+                        if (npcCurr.Name == name)
+                        {
+                            for (int i = 0; i < 32; i++) {
+                                Int32 val = (Int32)npcCurr.CellHandles.FirstOrDefault(c => c.Def.InternalName == $"spEffectID{i}").Value;
+                                if (val == -1) {
+                                    npcCurr.CellHandles.FirstOrDefault(c => c.Def.InternalName == $"spEffectID{i}").SetValue(curr.ID);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return new CompoundAction(actions);
+        }
+
         public CompoundAction GenerateNavmeshWorkArounds()
         {
             List<EditorAction> actions = new List<EditorAction>();
@@ -334,7 +364,7 @@ namespace StudioCore.ParamEditor
             List<Param.Row> newCharInits = new List<Param.Row>();
             List<Param.Row> newFaceGens = new List<Param.Row>();
             List<EditorAction> actions = new List<EditorAction>();
-            for (int i = 0; i < 301; i++)
+            for (int i = 0; i < 3001; i++)
             {
                 Byte bodyType = (Byte)RollDice(2, 1, 0);
 
@@ -507,37 +537,114 @@ namespace StudioCore.ParamEditor
             //Equipment
             double runningEquipLoad = GetEquipLoad(stats["baseEnd"]);
 
+            List<int> mainWepTypes = new List<int>() { 
+                1,3,5,7,9,11,13,14,15,16,17,19,21,23,24,25,28,29,31,35,37,39,41,
+            };
+
+            List<int> secondaryWepTypes = new List<int>() {
+                1,3,5,7,9,11,13,14,15,16,17,19,21,23,24,25,28,29,31,35,37,39,41,
+                50,51,53,55,65,67,69,87
+            };
+
+            int weaponTyp1 = mainWepTypes[RollDice(mainWepTypes.Count, 1, 0)];
+            int weaponTyp2 = secondaryWepTypes[RollDice(secondaryWepTypes.Count, 1, 0)];
+
             List<Param.Row> weaponPool1 = this._params["EquipParamWeapon"].Rows.Where(w =>
                 (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "isCustom").Value == 1
                 && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 9999999
-                && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 61
-                && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 57
-                && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 65
-                && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 67
-                && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 69
-                && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 51
-                && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 55
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properStrength").Value <= (Byte)stats["baseStr"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properAgility").Value <= (Byte)stats["baseDex"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properMagic").Value <= (Byte)stats["baseMag"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properFaith").Value <= (Byte)stats["baseFai"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properLuck").Value <= (Byte)stats["baseLuc"]
+                //&& (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 61
+                //&& (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 57
+                //&& (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 65
+                //&& (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 67
+                //&& (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 69
+                //&& (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 51
+                //&& (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 55
+                && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == weaponTyp1
+                //filter out infusion weapons
+                && ((Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 0
+                || (Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 2200
+                )
+                //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properStrength").Value <= (Byte)stats["baseStr"]
+                //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properAgility").Value <= (Byte)stats["baseDex"]
+                //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properMagic").Value <= (Byte)stats["baseMag"]
+                //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properFaith").Value <= (Byte)stats["baseFai"]
+                //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properLuck").Value <= (Byte)stats["baseLuc"]
                 ).ToList();
 
             List<Param.Row> weaponPool2 = this._params["EquipParamWeapon"].Rows.Where(w =>
                 (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "isCustom").Value == 1
                 && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 9999999
-                && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 61
-                && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 57
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properStrength").Value <= (Byte)stats["baseStr"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properAgility").Value <= (Byte)stats["baseDex"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properMagic").Value <= (Byte)stats["baseMag"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properFaith").Value <= (Byte)stats["baseFai"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properLuck").Value <= (Byte)stats["baseLuc"]
+                //&& (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 61
+                //&& (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 57
+                && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == weaponTyp2
+                //filter out infusion weapons
+                && ((Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 0
+                || (Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 2200
+                //large shields
+                || ((UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 69
+                && ((Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 8200
+                    || (Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 8300
+                ))
+                //med shields
+                || ((UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 67
+                && ((Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 8100
+                    || (Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 8300
+                ))
+                //small shields
+                || ((UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 65
+                && ((Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 8000
+                   || (Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 8500
+                ))
+                //crossbows
+                || ((UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 55
+                && ((Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 3100
+                    || (Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 3200
+                    || (Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 3300
+                ))
+                //light bows
+                || ((UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 67
+                && ((Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 8100
+                    || (Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 2200
+                    || (Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 3300
+                ))
+                //med bows
+                || ((UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 65
+                && ((Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 8000
+                    || (Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 2200
+                    || (Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 3300
+                ))
+                //great bows
+                || ((UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 45
+                && ((Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 8000
+                    || (Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 2200
+                    || (Int16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 3300
+                )))
+                //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properStrength").Value <= (Byte)stats["baseStr"]
+                //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properAgility").Value <= (Byte)stats["baseDex"]
+                //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properMagic").Value <= (Byte)stats["baseMag"]
+                //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properFaith").Value <= (Byte)stats["baseFai"]
+                //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properLuck").Value <= (Byte)stats["baseLuc"]
                 ).ToList();
 
             Param.Row weapon1 = weaponPool1[RollDice(weaponPool1.Count, 1, 0)];
             Param.Row weapon2 = weaponPool2[RollDice(weaponPool2.Count, 1, 0)];
+
+            if ((Int16)weapon1.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 0) {
+                List<Param.Row> infusePool = this._params["EquipParamWeapon"].Rows.Where(w =>
+                    (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "originEquipWep").Value == weapon1.ID
+                    ).ToList();
+
+                weapon1 = infusePool[RollDice(infusePool.Count, 1, 0)];
+            }
+
+            if ((Int16)weapon2.CellHandles.FirstOrDefault(c => c.Def.InternalName == "reinforceTypeId").Value == 0)
+            {
+                List<Param.Row> infusePool = this._params["EquipParamWeapon"].Rows.Where(w =>
+                    (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "originEquipWep").Value == weapon2.ID
+                    ).ToList();
+
+                weapon2 = infusePool[RollDice(infusePool.Count, 1, 0)];
+            }
 
             runningEquipLoad -= (Single)weapon1.CellHandles.FirstOrDefault(c => c.Def.InternalName == "weight").Value;
             runningEquipLoad -= (Single)weapon2.CellHandles.FirstOrDefault(c => c.Def.InternalName == "weight").Value;
@@ -546,43 +653,43 @@ namespace StudioCore.ParamEditor
             newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Wep_Left").SetValue(weapon2.ID);
 
             //Bow
-            if ((UInt16)weapon1.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 51 || (UInt16)weapon2.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 51)
-            {
+            //if ((UInt16)weapon2.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 51 || (UInt16)weapon2.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 51)
+            //{
                 newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Arrow").SetValue(50000000);
                 newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "arrowNum").SetValue((UInt16)99);
-            }
+            //}
 
             //Crossbow
-            if ((UInt16)weapon1.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 55 || (UInt16)weapon2.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 55)
-            {
+            //if ((UInt16)weapon2.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 55 || (UInt16)weapon2.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 55)
+            //{
                 newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Bolt").SetValue(52000000);
                 newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "boltNum").SetValue((UInt16)99);
-            }
+            //}
 
-            List<Param.Row> sealPool = this._params["EquipParamWeapon"].Rows.Where(w =>
-                (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "isCustom").Value == 1
-                && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 9999999
-                && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 61
-                && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 57
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properStrength").Value <= (Byte)stats["baseStr"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properAgility").Value <= (Byte)stats["baseDex"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properMagic").Value <= (Byte)stats["baseMag"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properFaith").Value <= (Byte)stats["baseFai"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properLuck").Value <= (Byte)stats["baseLuc"]
-                ).ToList();
+            //List<Param.Row> sealPool = this._params["EquipParamWeapon"].Rows.Where(w =>
+            //    (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "isCustom").Value == 1
+            //    && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 9999999
+            //    && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 61
+            //    && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 57
+            //    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properStrength").Value <= (Byte)stats["baseStr"]
+            //    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properAgility").Value <= (Byte)stats["baseDex"]
+            //    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properMagic").Value <= (Byte)stats["baseMag"]
+            //    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properFaith").Value <= (Byte)stats["baseFai"]
+            //    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properLuck").Value <= (Byte)stats["baseLuc"]
+            //    ).ToList();
 
-            if (sealPool.Count() > 0)
-            {
-                Param.Row seal = sealPool[RollDice(sealPool.Count, 1, 0)];
-                newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Subwep_Left").SetValue(seal.ID);
-
+            //if (false && sealPool.Count() > 0)
+            //{
+            //    Param.Row seal = sealPool[RollDice(sealPool.Count, 1, 0)];
+            //    newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Subwep_Left").SetValue(seal.ID);
+            //
                 //if player has seal, give incants
                 List<Param.Row> incantPool = this._params["Magic"].Rows.Where(w =>
                     w.ID < 8000
                     && w.ID >= 6000
-                    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementIntellect").Value <= (Byte)stats["baseMag"]
-                    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementFaith").Value <= (Byte)stats["baseFai"]
-                    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementLuck").Value <= (Byte)stats["baseLuc"]
+                    //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementIntellect").Value <= (Byte)stats["baseMag"]
+                    //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementFaith").Value <= (Byte)stats["baseFai"]
+                    //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementLuck").Value <= (Byte)stats["baseLuc"]
                     ).ToList();
 
                 if (incantPool.Count > 1)
@@ -593,32 +700,32 @@ namespace StudioCore.ParamEditor
                     newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Spell_01").SetValue(inc1.ID);
                     newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Spell_03").SetValue(inc2.ID);
                 }
-            }
+            //}
 
-            List<Param.Row> staffPool = this._params["EquipParamWeapon"].Rows.Where(w =>
-                (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "isCustom").Value == 1
-                && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 9999999
-                && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 61
-                && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 57
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properStrength").Value <= (Byte)stats["baseStr"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properAgility").Value <= (Byte)stats["baseDex"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properMagic").Value <= (Byte)stats["baseMag"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properFaith").Value <= (Byte)stats["baseFai"]
-                && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properLuck").Value <= (Byte)stats["baseLuc"]
-                ).ToList();
+            //List<Param.Row> staffPool = this._params["EquipParamWeapon"].Rows.Where(w =>
+            //    (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "isCustom").Value == 1
+            //    && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 9999999
+            //    && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value != 61
+            //    && (UInt16)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "wepType").Value == 57
+            //    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properStrength").Value <= (Byte)stats["baseStr"]
+            //    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properAgility").Value <= (Byte)stats["baseDex"]
+            //    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properMagic").Value <= (Byte)stats["baseMag"]
+            //    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properFaith").Value <= (Byte)stats["baseFai"]
+            //    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "properLuck").Value <= (Byte)stats["baseLuc"]
+            //    ).ToList();
 
-            if (staffPool.Count() > 0)
-            {
-                Param.Row staff = staffPool[RollDice(staffPool.Count, 1, 0)];
-                newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Subwep_Right").SetValue(staff.ID);
+            //if (false && staffPool.Count() > 0)
+            //{
+            //    Param.Row staff = staffPool[RollDice(staffPool.Count, 1, 0)];
+            //    newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Subwep_Right").SetValue(staff.ID);
 
                 //if player has staff, give spells
                 List<Param.Row> spellPool = this._params["Magic"].Rows.Where(w =>
                     w.ID >= 4000
                     && w.ID < 6000
-                    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementIntellect").Value <= (Byte)stats["baseMag"]
-                    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementFaith").Value <= (Byte)stats["baseFai"]
-                    && (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementLuck").Value <= (Byte)stats["baseLuc"]
+                    //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementIntellect").Value <= (Byte)stats["baseMag"]
+                    //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementFaith").Value <= (Byte)stats["baseFai"]
+                    //&& (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "requirementLuck").Value <= (Byte)stats["baseLuc"]
                     ).ToList();
 
                 if (spellPool.Count > 1)
@@ -629,13 +736,13 @@ namespace StudioCore.ParamEditor
                     newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Spell_02").SetValue(spl1.ID);
                     newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Spell_04").SetValue(spl2.ID);
                 }
-            }
+            //}
 
-            if (runningEquipLoad > 5)
+            if (true || runningEquipLoad > 5)
             {
                 List<Param.Row> pool = this._params["EquipParamProtector"].Rows.Where(w =>
                     (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "bodyEquip").Value == 1
-                    && (Single)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "weight").Value <= runningEquipLoad
+                    //&& (Single)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "weight").Value <= runningEquipLoad
                     && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 99999
                     && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 999999
                     ).ToList();
@@ -652,11 +759,11 @@ namespace StudioCore.ParamEditor
                 }
             }
 
-            if (runningEquipLoad > 5)
+            if (true || runningEquipLoad > 5)
             {
                 List<Param.Row> pool = this._params["EquipParamProtector"].Rows.Where(w =>
 (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "legEquip").Value == 1
-&& (Single)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "weight").Value <= runningEquipLoad
+//&& (Single)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "weight").Value <= runningEquipLoad
 && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 99999
 && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 999999
 ).ToList();
@@ -672,11 +779,11 @@ namespace StudioCore.ParamEditor
                 }
             }
 
-            if (runningEquipLoad > 5)
+            if (true || runningEquipLoad > 5)
             {
                 List<Param.Row> pool = this._params["EquipParamProtector"].Rows.Where(w =>
 (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "armEquip").Value == 1
-&& (Single)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "weight").Value <= runningEquipLoad
+//&& (Single)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "weight").Value <= runningEquipLoad
 && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 99999
 && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 999999
 ).ToList();
@@ -692,11 +799,11 @@ namespace StudioCore.ParamEditor
                 }
             }
 
-            if (runningEquipLoad > 5)
+            if (true || runningEquipLoad > 5)
             {
                 List<Param.Row> pool = this._params["EquipParamProtector"].Rows.Where(w =>
 (Byte)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "headEquip").Value == 1
-&& (Single)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "weight").Value <= runningEquipLoad
+//&& (Single)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "weight").Value <= runningEquipLoad
 && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 99999
 && (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 999999
 ).ToList();
@@ -708,6 +815,26 @@ namespace StudioCore.ParamEditor
                     {
                         newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Helm").SetValue(helm.ID);
                         runningEquipLoad -= (Single)helm.CellHandles.FirstOrDefault(c => c.Def.InternalName == "weight").Value;
+                    }
+                }
+            }
+
+            //talisman
+            if (true || runningEquipLoad > 5)
+            {
+                List<Param.Row> pool = this._params["EquipParamAccessory"].Rows.Where(w =>
+//&& (Single)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "weight").Value <= runningEquipLoad
+(Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 99999
+&& (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 999999
+&& (Int32)w.CellHandles.FirstOrDefault(c => c.Def.InternalName == "sortId").Value != 9999999
+).ToList();
+                if (pool.Count() > 0)
+                {
+                    Param.Row tal = pool[RollDice(pool.Count, 1, 0)];
+
+                    if (tal != null)
+                    {
+                        newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Accessory01").SetValue(tal.ID);
                     }
                 }
             }
@@ -729,7 +856,7 @@ namespace StudioCore.ParamEditor
             newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "itemNum_07").SetValue((Byte)50);
             newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "item_10").SetValue(9500);
             newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "itemNum_10").SetValue((Byte)99);
-            newChar.CellHandles.FirstOrDefault(c => c.Def.InternalName == "equip_Accessory01").SetValue(1032);
+            
 
             newChar.ID = 70000 + i;
             newChar.Name = $"AUTOGENNED{i}";

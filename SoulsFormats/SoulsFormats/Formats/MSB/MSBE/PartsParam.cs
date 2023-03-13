@@ -2859,6 +2859,14 @@ namespace SoulsFormats
                 }
 
                 /// <summary>
+                /// A dangerous method used to set unkpartnames for grid generation on the overworld map
+                /// </summary>
+                public void DangerouslySetUnkPartNames(string[] names)
+                {
+                    UnkPartNames = names;
+                }
+
+                /// <summary>
                 /// Unknown.
                 /// </summary>
                 public class AssetUnkStruct4

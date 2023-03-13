@@ -515,11 +515,12 @@ namespace StudioCore.MsbEditor
         private float XPosOffset = 0;
         private float YPosOffset = 0;
         private float ZPosOffset = 0;
+        private int IsOverworld = 0;
 
 
         private static Regex TrailIDRegex = new Regex(@"_(?<id>\d+)$");
 
-        public GenerateGridObjectsAction(Universe univ, Scene.RenderScene scene, List<MapEntity> objects, bool setSelection, int XWidth, int YHeight, int ZDepth, int XIdOffset, int YIdOffset, int ZIdOffset, float XPosOffset, float YPosOffset, float ZPosOffset)
+        public GenerateGridObjectsAction(Universe univ, Scene.RenderScene scene, List<MapEntity> objects, bool setSelection, int XWidth, int YHeight, int ZDepth, int XIdOffset, int YIdOffset, int ZIdOffset, float XPosOffset, float YPosOffset, float ZPosOffset, int IsOverworld)
         {
             Universe = univ;
             Scene = scene;
@@ -534,12 +535,14 @@ namespace StudioCore.MsbEditor
             this.XPosOffset = XPosOffset;
             this.YPosOffset = YPosOffset;
             this.ZPosOffset = ZPosOffset;
+            this.IsOverworld = IsOverworld;
         }
 
         public override ActionEvent Execute()
         {
             bool clonesCached = Clones.Count() > 0;
             var objectnames = new Dictionary<string, HashSet<string>>();
+            Dictionary<string, int> unk08s = new Dictionary<string, int>(); 
             for (int z = 0; z < ZDepth; z++)
             {
                 for (int y = 0; y < YHeight; y++)
@@ -573,7 +576,7 @@ namespace StudioCore.MsbEditor
                                     var idstring = idmatch.Result("${id}");
                                     int id = int.Parse(idstring);
                                     string newid = idstring;
-                                    while (objectnames[Clonables[i].MapID].Contains(Clonables[i].Name.Substring(0, Clonables[i].Name.Length - idstring.Length) + newid))
+                                    while (objectnames[Clonables[i].MapID].Contains("AUTOGEN" + Clonables[i].Name.Substring(0, Clonables[i].Name.Length - idstring.Length) + newid))
                                     {
                                         id++;
                                         newid = id.ToString("D" + idstring.Length.ToString());
@@ -581,28 +584,72 @@ namespace StudioCore.MsbEditor
                                     newobj.Name = "AUTOGEN" + Clonables[i].Name.Substring(0, Clonables[i].Name.Length - idstring.Length) + newid;
                                     objectnames[Clonables[i].MapID].Add(newobj.Name);
 
-                                    if(((MSBE.Part)newobj.WrappedObject).EntityID != 0 && ((MSBE.Part)newobj.WrappedObject).EntityID != -1)
+                                    //Is a map part
+                                    if (newobj.Type == MapEntity.MapEntityType.Part)//msbObj is MSBE.Part part <- casts right in the check
                                     {
-                                        ((MSBE.Part)newobj.WrappedObject).EntityID = Convert.ToUInt32(((MSBE.Part)newobj.WrappedObject).EntityID + (x * XIdOffset) + (y * YIdOffset) + (z * ZIdOffset));
-                                    }
+                                        if (((MSBE.Part)newobj.WrappedObject).EntityID != 0 && ((MSBE.Part)newobj.WrappedObject).EntityID != -1)
+                                        {
+                                            ((MSBE.Part)newobj.WrappedObject).EntityID = Convert.ToUInt32(((MSBE.Part)newobj.WrappedObject).EntityID + (x * XIdOffset) + (y * YIdOffset) + (z * ZIdOffset));
+                                        }
                                     ((MSBE.Part)newobj.WrappedObject).Position = new System.Numerics.Vector3(
                                         ((MSBE.Part)newobj.WrappedObject).Position.X + (x * XPosOffset),
                                         ((MSBE.Part)newobj.WrappedObject).Position.Y + (z * ZPosOffset),
                                         ((MSBE.Part)newobj.WrappedObject).Position.Z + (y * YPosOffset)
                                     );
+                                        //handle overworld
+                                        if (IsOverworld == 1)
+                                        {// )&& newobj.GetType() == typeof(MSBE.Part.Asset)
+                                            string[] unkPartNames = Enumerable.Repeat(string.Empty, 6).ToArray();
+                                            unkPartNames[4] = newobj.Name;
+                                            unkPartNames[5] = newobj.Name;
+
+                                            ((MSBE.Part.Asset)newobj.WrappedObject).DangerouslySetUnkPartNames(unkPartNames);
+                                        }
+                                        if (unk08s.ContainsKey(((MSBE.Part)newobj.WrappedObject).ModelName))
+                                        {
+                                            unk08s[((MSBE.Part)newobj.WrappedObject).ModelName] += 1;
+                                        }
+                                        else
+                                        {
+                                            unk08s.Add(((MSBE.Part)newobj.WrappedObject).ModelName, 1001);
+                                        }
+                                    ((MSBE.Part)newobj.WrappedObject).Unk08 = unk08s[((MSBE.Part)newobj.WrappedObject).ModelName];
+                                    } //Is a region
+                                    else if(newobj.Type == MapEntity.MapEntityType.Region)
+                                    {
+                                        if (((MSBE.Region)newobj.WrappedObject).EntityID != 0 && ((MSBE.Region)newobj.WrappedObject).EntityID != -1)
+                                        {
+                                            ((MSBE.Region)newobj.WrappedObject).EntityID = Convert.ToUInt32(((MSBE.Region)newobj.WrappedObject).EntityID + (x * XIdOffset) + (y * YIdOffset) + (z * ZIdOffset));
+                                        }
+                                    ((MSBE.Region)newobj.WrappedObject).Position = new System.Numerics.Vector3(
+                                        ((MSBE.Region)newobj.WrappedObject).Position.X + (x * XPosOffset),
+                                        ((MSBE.Region)newobj.WrappedObject).Position.Y + (z * ZPosOffset),
+                                        ((MSBE.Region)newobj.WrappedObject).Position.Z + (y * YPosOffset)
+                                    );
+                                    //Env points do not need unique Unk08s
+                                    }
                                 }
                                 else
                                 {
                                     var idstring = "0001";
                                     int id = int.Parse(idstring);
                                     string newid = idstring;
-                                    while (objectnames[Clonables[i].MapID].Contains(Clonables[i].Name + "_" + newid))
+                                    while (objectnames[Clonables[i].MapID].Contains("AUTOGEN" + Clonables[i].Name + "_" + newid))
                                     {
                                         id++;
                                         newid = id.ToString("D" + idstring.Length.ToString());
                                     }
                                     newobj.Name = "AUTOGEN" + Clonables[i].Name + "_" + newid ;
                                     objectnames[Clonables[i].MapID].Add(newobj.Name);
+                                    //handle overworld
+                                    if (IsOverworld == 1)
+                                    {// )&& newobj.GetType() == typeof(MSBE.Part.Asset)
+                                        string[] unkPartNames = Enumerable.Repeat(string.Empty, 6).ToArray();
+                                        unkPartNames[4] = newobj.Name;
+                                        unkPartNames[5] = newobj.Name;
+                                    
+                                        ((MSBE.Part.Asset)newobj.WrappedObject).DangerouslySetUnkPartNames(unkPartNames);
+                                    }
                                 }
 
                                 m.Objects.Insert(m.Objects.IndexOf(Clonables[i]) + 1, newobj);
