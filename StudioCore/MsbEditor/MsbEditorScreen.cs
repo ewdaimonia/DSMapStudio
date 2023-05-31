@@ -123,7 +123,9 @@ namespace StudioCore.MsbEditor
 
             // Throw any exceptions that ocurred during async map loading.
             if (Universe.LoadMapExceptions != null)
-                throw Universe.LoadMapExceptions;
+            {
+                Universe.LoadMapExceptions.Throw();
+            }
         }
 
         public void EditorResized(Sdl2Window window, GraphicsDevice device)
@@ -255,7 +257,11 @@ namespace StudioCore.MsbEditor
             var selected = _selection.GetFilteredSelection<Entity>();
             foreach (var s in selected)
             {
-                var rot = s.GetLocalTransform().EulerRotation;
+                var rot = s.GetRootTransform().EulerRotation;
+
+                // Offset the new position by the map's offset from the origin.
+                TransformNode node = (TransformNode) s.Container.RootObject.WrappedObject;
+                new_pos -= node.Position;
 
                 Transform newPos = new Transform(new_pos, rot);
 
@@ -1043,13 +1049,12 @@ namespace StudioCore.MsbEditor
             Viewport.OnGui();
 
             SceneTree.OnGui();
+            PropSearch.OnGui(propSearchCmd);
             if (MapStudioNew.FirstFrame)
             {
                 ImGui.SetNextWindowFocus();
             }
             PropEditor.OnGui(_selection, "mapeditprop", Viewport.Width, Viewport.Height);
-            DispGroupEditor.OnGui(Universe._dispGroupCount);
-            PropSearch.OnGui(propSearchCmd);
 
             // Not usable yet
             if (FeatureFlags.EnableNavmeshBuilder)
@@ -1059,6 +1064,8 @@ namespace StudioCore.MsbEditor
 
             ResourceManager.OnGuiDrawTasks(Viewport.Width, Viewport.Height);
             ResourceManager.OnGuiDrawResourceList();
+
+            DispGroupEditor.OnGui(Universe._dispGroupCount);
 
             if (_activeModal != null)
             {
@@ -1140,6 +1147,8 @@ namespace StudioCore.MsbEditor
         public void ReloadUniverse()
         {
             Universe.UnloadAllMaps();
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
             GC.Collect();
             Universe.PopulateMapList();
 

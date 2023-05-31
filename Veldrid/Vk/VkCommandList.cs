@@ -62,9 +62,12 @@ namespace Veldrid.Vk
             : base(ref description, gd.Features, gd.UniformBufferMinOffsetAlignment, gd.StructuredBufferMinOffsetAlignment)
         {
             _gd = gd;
-            VkCommandPoolCreateInfo poolCI = new VkCommandPoolCreateInfo();
-            poolCI.flags = VkCommandPoolCreateFlags.ResetCommandBuffer;
-            poolCI.queueFamilyIndex = description.IsTransfer ? gd.TransferQueueIndex : gd.GraphicsQueueIndex;
+            var poolCI = new VkCommandPoolCreateInfo
+            {
+                sType = VkStructureType.CommandPoolCreateInfo,
+                flags = VkCommandPoolCreateFlags.ResetCommandBuffer,
+                queueFamilyIndex = description.IsTransfer ? gd.TransferQueueIndex : gd.GraphicsQueueIndex
+            };
             VkResult result = vkCreateCommandPool(_gd.Device, &poolCI, null, out _pool);
             CheckResult(result);
 
@@ -85,10 +88,13 @@ namespace Veldrid.Vk
                 }
             }
 
-            VkCommandBufferAllocateInfo cbAI = new VkCommandBufferAllocateInfo();
-            cbAI.commandPool = _pool;
-            cbAI.commandBufferCount = 1;
-            cbAI.level = VkCommandBufferLevel.Primary;
+            var cbAI = new VkCommandBufferAllocateInfo
+            {
+                sType = VkStructureType.CommandBufferAllocateInfo,
+                commandPool = _pool,
+                commandBufferCount = 1,
+                level = VkCommandBufferLevel.Primary
+            };
             VkCommandBuffer cb = new VkCommandBuffer();
             VkResult result = vkAllocateCommandBuffers(_gd.Device, &cbAI, &cb);
             CheckResult(result);
@@ -155,8 +161,11 @@ namespace Veldrid.Vk
 
             _currentStagingInfo = GetStagingResourceInfo();
 
-            VkCommandBufferBeginInfo beginInfo = new VkCommandBufferBeginInfo();
-            beginInfo.flags = VkCommandBufferUsageFlags.OneTimeSubmit;
+            var beginInfo = new VkCommandBufferBeginInfo
+            {
+                sType = VkStructureType.CommandBufferBeginInfo,
+                flags = VkCommandBufferUsageFlags.OneTimeSubmit
+            };
             vkBeginCommandBuffer(_cb, &beginInfo);
             _commandBufferBegun = true;
 
@@ -539,9 +548,12 @@ namespace Veldrid.Vk
                 }
             }
 
-            VkRenderPassBeginInfo renderPassBI = new VkRenderPassBeginInfo();
-            renderPassBI.renderArea = new VkRect2D(_currentFramebuffer.RenderableWidth, _currentFramebuffer.RenderableHeight);
-            renderPassBI.framebuffer = _currentFramebuffer.CurrentFramebuffer;
+            var renderPassBI = new VkRenderPassBeginInfo
+            {
+                sType = VkStructureType.RenderPassBeginInfo,
+                renderArea = new VkRect2D(_currentFramebuffer.RenderableWidth, _currentFramebuffer.RenderableHeight),
+                framebuffer = _currentFramebuffer.CurrentFramebuffer
+            };
 
             if (!haveAnyAttachments || !haveAllClearValues)
             {
@@ -606,17 +618,21 @@ namespace Veldrid.Vk
 
             // Place a barrier between RenderPasses, so that color / depth outputs
             // can be read in subsequent passes.
-            vkCmdPipelineBarrier(
-                _cb,
-                VkPipelineStageFlags.BottomOfPipe,
-                VkPipelineStageFlags.TopOfPipe,
-                VkDependencyFlags.None,
-                0,
-                null,
-                0,
-                null,
-                0,
-                null);
+            var barrier = new VkMemoryBarrier2
+            {
+                sType = VkStructureType.MemoryBarrier2,
+                srcStageMask = VkPipelineStageFlags2.AllCommands,
+                srcAccessMask = VkAccessFlags2.None,
+                dstStageMask = VkPipelineStageFlags2.AllCommands,
+                dstAccessMask = VkAccessFlags2.None
+            };
+            var dependencyInfo = new VkDependencyInfo
+            {
+                sType = VkStructureType.DependencyInfo,
+                memoryBarrierCount = 1,
+                pMemoryBarriers = &barrier
+            };
+            vkCmdPipelineBarrier2(_cb, &dependencyInfo);
         }
 
         private protected override void SetVertexBufferCore(uint index, DeviceBuffer buffer, uint offset)
@@ -756,81 +772,102 @@ namespace Veldrid.Vk
                 size = sizeInBytes
             };
 
-            VkMemoryBarrier barrier;
-            VkBufferMemoryBarrier bbarrier;
+            VkMemoryBarrier2 barrier;
+            VkBufferMemoryBarrier2 bbarrier;
+            VkDependencyInfo dependencyInfo;
 
             // If we're doing a readback, make sure memory is host visible
             if (destination.Usage.HasFlag(BufferUsage.Staging))
             {
-                bbarrier.sType = VkStructureType.BufferMemoryBarrier;
-                bbarrier.srcAccessMask = VkAccessFlags.MemoryWrite | VkAccessFlags.ShaderWrite;
-                bbarrier.dstAccessMask = VkAccessFlags.TransferRead;
-                bbarrier.pNext = null;
-                bbarrier.buffer = srcVkBuffer.DeviceBuffer;
-                bbarrier.offset = 0;
-                bbarrier.size = source.SizeInBytes;
-                bbarrier.srcQueueFamilyIndex = 0;
-                bbarrier.dstQueueFamilyIndex = 0;
-                vkCmdPipelineBarrier(
-                    _cb,
-                    VkPipelineStageFlags.AllGraphics, VkPipelineStageFlags.Transfer,
-                    VkDependencyFlags.None,
-                    0, null,
-                    1, &bbarrier,
-                    0, null);
+                bbarrier = new VkBufferMemoryBarrier2
+                {
+                    sType = VkStructureType.BufferMemoryBarrier2,
+                    srcStageMask = VkPipelineStageFlags2.AllGraphics,
+                    srcAccessMask = VkAccessFlags2.MemoryWrite | VkAccessFlags2.ShaderWrite,
+                    dstStageMask = VkPipelineStageFlags2.Transfer,
+                    dstAccessMask = VkAccessFlags2.TransferRead,
+                    srcQueueFamilyIndex = 0,
+                    dstQueueFamilyIndex = 0,
+                    buffer = srcVkBuffer.DeviceBuffer,
+                    offset = 0,
+                    size = source.SizeInBytes
+                };
+                dependencyInfo = new VkDependencyInfo
+                {
+                    sType = VkStructureType.DependencyInfo,
+                    dependencyFlags = VkDependencyFlags.None,
+                    bufferMemoryBarrierCount = 1,
+                    pBufferMemoryBarriers = &bbarrier,
+                };
+                vkCmdPipelineBarrier2(_cb, &dependencyInfo);
             }
 
             vkCmdCopyBuffer(_cb, srcVkBuffer.DeviceBuffer, dstVkBuffer.DeviceBuffer, 1, &region);
 
             if (destination.Usage.HasFlag(BufferUsage.Staging))
             {
-                bbarrier.sType = VkStructureType.BufferMemoryBarrier;
-                bbarrier.srcAccessMask = VkAccessFlags.TransferWrite;
-                bbarrier.dstAccessMask = VkAccessFlags.HostRead;
-                bbarrier.pNext = null;
-                bbarrier.buffer = dstVkBuffer.DeviceBuffer;
-                bbarrier.offset = 0;
-                bbarrier.size = source.SizeInBytes;
-                bbarrier.srcQueueFamilyIndex = 0;
-                bbarrier.dstQueueFamilyIndex = 0;
-                vkCmdPipelineBarrier(
-                    _cb,
-                    VkPipelineStageFlags.Transfer, VkPipelineStageFlags.Host,
-                    VkDependencyFlags.None,
-                    0, null,
-                    1, &bbarrier,
-                    0, null);
+                bbarrier = new VkBufferMemoryBarrier2
+                {
+                    sType = VkStructureType.BufferMemoryBarrier2,
+                    srcStageMask = VkPipelineStageFlags2.Transfer,
+                    srcAccessMask = VkAccessFlags2.TransferWrite,
+                    dstStageMask = VkPipelineStageFlags2.Host,
+                    dstAccessMask = VkAccessFlags2.HostRead,
+                    srcQueueFamilyIndex = 0,
+                    dstQueueFamilyIndex = 0,
+                    buffer = dstVkBuffer.DeviceBuffer,
+                    offset = 0,
+                    size = source.SizeInBytes,
+                };
+                dependencyInfo = new VkDependencyInfo
+                {
+                    sType = VkStructureType.DependencyInfo,
+                    dependencyFlags = VkDependencyFlags.None,
+                    bufferMemoryBarrierCount = 1,
+                    pBufferMemoryBarriers = &bbarrier,
+                };
+                vkCmdPipelineBarrier2(_cb, &dependencyInfo);
             }
             else if (!IsTransfer)
             {
                 if (destination.Usage.HasFlag(BufferUsage.VertexBuffer))
                 {
-                    barrier.sType = VkStructureType.MemoryBarrier;
-                    barrier.srcAccessMask = VkAccessFlags.TransferWrite;
-                    barrier.dstAccessMask = VkAccessFlags.VertexAttributeRead;
-                    barrier.pNext = null;
-                    vkCmdPipelineBarrier(
-                        _cb,
-                        VkPipelineStageFlags.Transfer, VkPipelineStageFlags.VertexInput,
-                        VkDependencyFlags.None,
-                        1, &barrier,
-                        0, null,
-                        0, null);
+                    barrier = new VkMemoryBarrier2
+                    {
+                        sType = VkStructureType.MemoryBarrier2,
+                        srcStageMask = VkPipelineStageFlags2.Transfer,
+                        srcAccessMask = VkAccessFlags2.TransferWrite,
+                        dstStageMask = VkPipelineStageFlags2.VertexInput,
+                        dstAccessMask = VkAccessFlags2.VertexAttributeRead,
+                    };
+                    dependencyInfo = new VkDependencyInfo
+                    {
+                        sType = VkStructureType.DependencyInfo,
+                        dependencyFlags = VkDependencyFlags.None,
+                        memoryBarrierCount = 1,
+                        pMemoryBarriers = &barrier,
+                    };
+                    vkCmdPipelineBarrier2(_cb, &dependencyInfo);
                 }
                 else
                 {
-                    barrier.sType = VkStructureType.MemoryBarrier;
-                    barrier.srcAccessMask = VkAccessFlags.TransferWrite;
-                    //barrier.dstAccessMask = VkAccessFlags.VertexAttributeRead;
-                    barrier.dstAccessMask = VkAccessFlags.IndirectCommandRead;
-                    barrier.pNext = null;
-                    vkCmdPipelineBarrier(
-                        _cb,
-                        VkPipelineStageFlags.Transfer, VkPipelineStageFlags.DrawIndirect,
-                        VkDependencyFlags.None,
-                        1, &barrier,
-                        0, null,
-                        0, null);
+                    barrier = new VkMemoryBarrier2
+                    {
+                        sType = VkStructureType.MemoryBarrier2,
+                        srcStageMask = VkPipelineStageFlags2.Transfer,
+                        srcAccessMask = VkAccessFlags2.TransferWrite,
+                        dstStageMask = VkPipelineStageFlags2.DrawIndirect,
+                        //dstAccessMask = VkAccessFlags2.VertexAttributeRead;
+                        dstAccessMask = VkAccessFlags2.IndirectCommandRead,
+                    };
+                    dependencyInfo = new VkDependencyInfo
+                    {
+                        sType = VkStructureType.DependencyInfo,
+                        dependencyFlags = VkDependencyFlags.None,
+                        memoryBarrierCount = 1,
+                        pMemoryBarriers = &barrier,
+                    };
+                    vkCmdPipelineBarrier2(_cb, &dependencyInfo);
                 }
             }
         }
@@ -1167,9 +1204,9 @@ namespace Veldrid.Vk
                     layerCount = vkTex.ArrayLayers,
                     mipLevel = 0
                 };
-                regions[blitIndex].srcOffsets_0 = new VkOffset3D();
-                regions[blitIndex].srcOffsets_1 = new VkOffset3D { x = (int)vkTex.Width, y = (int)vkTex.Height, z = (int)vkTex.Depth };
-                regions[blitIndex].dstOffsets_0 = new VkOffset3D();
+                regions[blitIndex].srcOffsets[0] = new VkOffset3D();
+                regions[blitIndex].srcOffsets[1] = new VkOffset3D { x = (int)vkTex.Width, y = (int)vkTex.Height, z = (int)vkTex.Depth };
+                regions[blitIndex].dstOffsets[0] = new VkOffset3D();
 
                 regions[blitIndex].dstSubresource = new VkImageSubresourceLayers
                 {
@@ -1180,7 +1217,7 @@ namespace Veldrid.Vk
                 };
 
                 Util.GetMipDimensions(vkTex, level, out uint mipWidth, out uint mipHeight, out uint mipDepth);
-                regions[blitIndex].dstOffsets_1 = new VkOffset3D { x = (int)mipWidth, y = (int)mipHeight, z = (int)mipDepth };
+                regions[blitIndex].dstOffsets[1] = new VkOffset3D { x = (int)mipWidth, y = (int)mipHeight, z = (int)mipDepth };
             }
 
             vkCmdBlitImage(
@@ -1238,17 +1275,19 @@ namespace Veldrid.Vk
             vkCmdDebugMarkerBeginEXT_t func = _gd.MarkerBegin;
             if (func == null) { return; }
 
-            VkDebugMarkerMarkerInfoEXT markerInfo = new VkDebugMarkerMarkerInfoEXT();
-
             int byteCount = Encoding.UTF8.GetByteCount(name);
-            byte* utf8Ptr = stackalloc byte[byteCount + 1];
+            sbyte* utf8Ptr = stackalloc sbyte[byteCount + 1];
             fixed (char* namePtr = name)
             {
-                Encoding.UTF8.GetBytes(namePtr, name.Length, utf8Ptr, byteCount);
+                Encoding.UTF8.GetBytes(namePtr, name.Length, (byte*)utf8Ptr, byteCount);
             }
             utf8Ptr[byteCount] = 0;
 
-            markerInfo.pMarkerName = utf8Ptr;
+            var markerInfo = new VkDebugMarkerMarkerInfoEXT
+            {
+                sType = VkStructureType.DebugMarkerMarkerInfoEXT,
+                pMarkerName = utf8Ptr
+            };
 
             func(_cb, &markerInfo);
         }
@@ -1266,17 +1305,19 @@ namespace Veldrid.Vk
             vkCmdDebugMarkerInsertEXT_t func = _gd.MarkerInsert;
             if (func == null) { return; }
 
-            VkDebugMarkerMarkerInfoEXT markerInfo = new VkDebugMarkerMarkerInfoEXT();
-
             int byteCount = Encoding.UTF8.GetByteCount(name);
-            byte* utf8Ptr = stackalloc byte[byteCount + 1];
+            sbyte* utf8Ptr = stackalloc sbyte[byteCount + 1];
             fixed (char* namePtr = name)
             {
-                Encoding.UTF8.GetBytes(namePtr, name.Length, utf8Ptr, byteCount);
+                Encoding.UTF8.GetBytes(namePtr, name.Length, (byte*)utf8Ptr, byteCount);
             }
             utf8Ptr[byteCount] = 0;
 
-            markerInfo.pMarkerName = utf8Ptr;
+            VkDebugMarkerMarkerInfoEXT markerInfo = new VkDebugMarkerMarkerInfoEXT
+            {
+                sType = VkStructureType.DebugMarkerMarkerInfoEXT,
+                pMarkerName = utf8Ptr
+            };
 
             func(_cb, &markerInfo);
         }

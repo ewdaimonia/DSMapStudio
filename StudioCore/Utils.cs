@@ -712,7 +712,7 @@ namespace StudioCore
         /// Search an object's properties and return whichever object has the targeted property.
         /// </summary>
         /// <returns>Object that has the property, otherwise null.</returns>
-        public static object FindPropertyObject(PropertyInfo prop, object obj)
+        public static object FindPropertyObject(PropertyInfo prop, object obj, int classIndex = -1)
         {
             foreach (var p in obj.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public))
             {
@@ -724,6 +724,29 @@ namespace StudioCore
                     var retObj = FindPropertyObject(prop, p.GetValue(obj));
                     if (retObj != null)
                         return retObj;
+                }
+                else if (p.PropertyType.IsArray)
+                {
+                    var pType = p.PropertyType.GetElementType();
+                    if (pType.IsNested)
+                    {
+                        Array array = (Array)p.GetValue(obj);
+                        if (classIndex != -1)
+                        {
+                            var retObj = FindPropertyObject(prop, array.GetValue(classIndex));
+                            if (retObj != null)
+                                return retObj;
+                        }
+                        else
+                        {
+                            foreach (var arrayObj in array)
+                            {
+                                var retObj = FindPropertyObject(prop, arrayObj);
+                                if (retObj != null)
+                                    return retObj;
+                            }
+                        }
+                    }
                 }
             }
             return null;
@@ -742,6 +765,19 @@ namespace StudioCore
             {
                 ImGui.Text(displayText);
                 ImGui.EndPopup();
+            }
+        }
+
+        public static void ImGui_InputUint(string text, ref uint val)
+        {
+            string strval = $@"{val}";
+            if (ImGui.InputText(text, ref strval, 16))
+            {
+                var res = uint.TryParse(strval, out uint refval);
+                if (res)
+                {
+                    val = refval;
+                }
             }
         }
     }

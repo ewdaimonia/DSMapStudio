@@ -78,6 +78,9 @@ namespace StudioCore.TextEditor
             EditorActionManager.ExecuteAction(action);
             _activeEntryGroup = null;
             _activeIDCache = -1;
+
+            // Lazy method to refresh search filter
+            _searchFilterCached = "";
         }
 
         public override void DrawEditorMenu()
@@ -261,6 +264,7 @@ namespace StudioCore.TextEditor
                 }
                 return;
             }
+
             var dsid = ImGui.GetID("DockSpace_TextEntries");
             ImGui.DockSpace(dsid, new Vector2(0, 0), ImGuiDockNodeFlags.None);
 

@@ -109,7 +109,7 @@ namespace StudioCore.Scene
                 // Encode the draw
                 if (_indirectDrawCount[_stagingSet] >= _indirectStagingBuffer.Length)
                 {
-                    throw new Exception("Indirect buffer not large enough for draw");
+                    throw new Exception("Indirect buffer not large enough for draw\n\nTry increasing indirect draw buffer in settings.\n");
                 }
                 if (p == null)
                 {
@@ -347,7 +347,7 @@ namespace StudioCore.Scene
                 // Create per frame in flight resources
                 for (int i = 0; i < _bufferCount; i++)
                 {
-                    _drawEncoders.Add(new IndirectDrawEncoder(50000));
+                    _drawEncoders.Add(new IndirectDrawEncoder(CFG.Current.GFX_Limit_Buffer_Indirect_Draw));
                     _resourcesUpdatedFence.Add(device.ResourceFactory.CreateFence(i != 0));
                 }
                 Name = name;
@@ -524,7 +524,7 @@ namespace StudioCore.Scene
             UniformBufferAllocator = new GPUBufferAllocator(5 * 1024 * 1024, BufferUsage.StructuredBufferReadWrite, (uint)sizeof(InstanceData));
 
             MaterialBufferAllocator = new GPUBufferAllocator("materials", 5 * 1024 * 1024, BufferUsage.StructuredBufferReadWrite, (uint)sizeof(Material), ShaderStages.Fragment);
-            BoneBufferAllocator = new GPUBufferAllocator("bones", 65536 * 64, BufferUsage.StructuredBufferReadWrite, 64, ShaderStages.Vertex);
+            BoneBufferAllocator = new GPUBufferAllocator("bones", CFG.Current.GFX_Limit_Buffer_Flver_Bone * 64, BufferUsage.StructuredBufferReadWrite, 64, ShaderStages.Vertex);
             GlobalTexturePool = new TexturePool(device, "globalTextures", 6000);
             GlobalCubeTexturePool = new TexturePool(device, "globalCubeTextures", 500);
 

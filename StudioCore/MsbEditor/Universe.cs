@@ -23,7 +23,7 @@ namespace StudioCore.MsbEditor
     public class Universe
     {
 
-        public Exception LoadMapExceptions = null;
+        public System.Runtime.ExceptionServices.ExceptionDispatchInfo LoadMapExceptions = null;
         public Dictionary<string, ObjectContainer> LoadedObjectContainers { get; private set; } = new Dictionary<string, ObjectContainer>();
         private AssetLocator _assetLocator;
         private Scene.RenderScene _renderScene;
@@ -48,6 +48,19 @@ namespace StudioCore.MsbEditor
                 }
             }
             return null;
+        }
+
+        public int GetLoadedMapCount()
+        {
+            int i = 0;
+            foreach (var map in LoadedObjectContainers)
+            {
+                if (map.Value != null)
+                {
+                    i++;  
+                }
+            }
+            return i;
         }
 
         public GameType GameType => _assetLocator.Type;
@@ -201,6 +214,7 @@ namespace StudioCore.MsbEditor
             var mesh = DebugPrimitiveRenderableProxy.GetBoxRegionProxy(_renderScene);
             mesh.World = obj.GetWorldMatrix();
             obj.RenderSceneMesh = mesh;
+            mesh.DrawFilter = RenderFilter.Region;
             mesh.SetSelectable(obj);
             return mesh;
         }
@@ -236,11 +250,7 @@ namespace StudioCore.MsbEditor
             bool loadnav = false;
             bool loadflver = false;
             Scene.RenderFilter filt = Scene.RenderFilter.All;
-            var amapid = map.Name.Substring(0, 6) + "_00_00";
-            if (_assetLocator.Type == GameType.EldenRing)
-            {
-                amapid = map.Name;
-            }
+            var amapid = _assetLocator.GetAssetMapID(map.Name);
             // Special case for chalice dungeon assets
             if (map.Name.StartsWith("m29"))
             {
@@ -401,13 +411,6 @@ namespace StudioCore.MsbEditor
                     row.Name = "generator_" + row.ID.ToString();
                 }
 
-                // Offset the generators by the map offset
-                row.GetCellHandleOrThrow("PositionX").SetValue(
-                    (float)row.GetCellHandleOrThrow("PositionX").Value + map.MapOffset.Position.X);
-                row.GetCellHandleOrThrow("PositionY").SetValue(
-                    (float)row.GetCellHandleOrThrow("PositionY").Value + map.MapOffset.Position.Y);
-                row.GetCellHandleOrThrow("PositionZ").SetValue(
-                    (float)row.GetCellHandleOrThrow("PositionZ").Value + map.MapOffset.Position.Z);
                 
                 var mergedRow = new MergedParamRow();
                 mergedRow.AddRow("generator-loc", row);
@@ -416,6 +419,7 @@ namespace StudioCore.MsbEditor
                 var obj = new MapEntity(map, mergedRow, MapEntity.MapEntityType.DS2Generator);
                 generatorObjs.Add(row.ID, obj);
                 map.AddObject(obj);
+                map.MapOffsetNode.AddChild(obj);
             }
 
             var chrsToLoad = new HashSet<AssetDescription>();
@@ -481,22 +485,16 @@ namespace StudioCore.MsbEditor
                     row.Name = "eventloc_" + row.ID.ToString();
                 }
                 eventLocationParams.Add(row.ID, row);
-
-                // Offset the generators by the map offset
-                row.GetCellHandleOrThrow("PositionX").SetValue(
-                    (float)row.GetCellHandleOrThrow("PositionX").Value + map.MapOffset.Position.X);
-                row.GetCellHandleOrThrow("PositionY").SetValue(
-                    (float)row.GetCellHandleOrThrow("PositionY").Value + map.MapOffset.Position.Y);
-                row.GetCellHandleOrThrow("PositionZ").SetValue(
-                    (float)row.GetCellHandleOrThrow("PositionZ").Value + map.MapOffset.Position.Z);
-
+                
                 var obj = new MapEntity(map, row, MapEntity.MapEntityType.DS2EventLocation);
                 map.AddObject(obj);
+                map.MapOffsetNode.AddChild(obj);
 
                 // Try rendering as a box for now
                 var mesh = DebugPrimitiveRenderableProxy.GetBoxRegionProxy(_renderScene);
                 mesh.World = obj.GetLocalTransform().WorldMatrix;
                 obj.RenderSceneMesh = mesh;
+                mesh.DrawFilter = RenderFilter.Region;
                 mesh.SetSelectable(obj);
             }
 
@@ -537,6 +535,16 @@ namespace StudioCore.MsbEditor
             }
         }
 
+        public void LoadRelatedMaps(string mapid, Dictionary<string, ObjectContainer> maps)
+        {
+            var relatedMaps = SpecialMapConnections.GetRelatedMaps(GameType.EldenRing, mapid, maps.Keys);
+            foreach (var map in relatedMaps)
+            {
+                LoadMap(map.Key);
+            }
+            return;
+        }
+
         public bool LoadMap(string mapid, bool selectOnLoad = false)
         {
             if (_assetLocator.Type == GameType.DarkSoulsIISOTFS
@@ -554,7 +562,6 @@ namespace StudioCore.MsbEditor
             }
             LoadMapAsync(mapid, selectOnLoad);
             return true;
-
         }
 
         public BTL ReturnBTL(AssetDescription ad)
@@ -905,17 +912,14 @@ namespace StudioCore.MsbEditor
                 }
                 // Check for duplicate EntityIDs
                 CheckDupeEntityIDs(map);
-
-                return;
             }
-            catch(Exception e)
+            catch (Exception e)
             {
-                // Store async exception so it can be caught by crash handler.
 #if DEBUG
                 throw;
 #else
-                LoadMapExceptions = e;
-                return;
+                // Store async exception so it can be caught by crash handler.
+                LoadMapExceptions = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(e);
 #endif
             }
         }
@@ -1400,19 +1404,23 @@ namespace StudioCore.MsbEditor
             }
         }
 
-        public void UnloadMap(Map map)
+        public void UnloadContainer(ObjectContainer container, bool clearFromList = false)
         {
-            if (LoadedObjectContainers.ContainsKey(map.Name))
+            if (LoadedObjectContainers.ContainsKey(container.Name))
             {
-                foreach (var obj in map.Objects)
+                foreach (var obj in container.Objects)
                 {
                     if (obj != null)
                     {
                         obj.Dispose();
                     }
                 }
-                map.Clear();
-                LoadedObjectContainers[map.Name] = null;
+                container.Clear();
+                LoadedObjectContainers[container.Name] = null;
+                if (clearFromList)
+                {
+                    LoadedObjectContainers.Remove(container.Name);
+                }
             }
         }
 
@@ -1430,8 +1438,24 @@ namespace StudioCore.MsbEditor
             {
                 if (un is Map ma)
                 {
-                    UnloadMap(ma);
+                    UnloadContainer(ma);
                 }
+            }
+        }
+
+        public void UnloadAll(bool clearFromList = false)
+        {
+            List<ObjectContainer> toUnload = new List<ObjectContainer>();
+            foreach (var key in LoadedObjectContainers.Keys)
+            {
+                if (LoadedObjectContainers[key] != null)
+                {
+                    toUnload.Add(LoadedObjectContainers[key]);
+                }
+            }
+            foreach (var un in toUnload)
+            {
+                UnloadContainer(un, clearFromList);
             }
         }
 

@@ -75,7 +75,8 @@ namespace StudioCore
     public class AssetLocator
     {
 
-        public static readonly string GameExecutatbleFilter =
+        public static readonly string GameExecutableFilter =
+            "Game Executable (.EXE, EBOOT.BIN) |*.EXE*;*EBOOT.BIN*|" +
             "Windows executable (*.EXE) |*.EXE*|" +
             "Playstation executable (*.BIN) |*.BIN*|" +
             "All Files|*.*";
@@ -95,8 +96,9 @@ namespace StudioCore
             "All Files|*.*";
 
         public static readonly string ERParamUpgradeFilter =
-            ERRegulationFilter + "|" +
+            "Regulation file (regulation.bin) |*REGULATION*.BIN*" + "|" +
             "All Files|*.*";
+
          public static readonly string LooseParamFilter =
             "Loose Param file (*.Param) |*.Param*|" +
             "All Files|*.*";   
@@ -522,11 +524,13 @@ namespace StudioCore
                 List<string> files = new();
                 try
                 {
-                    files = Directory.GetFiles($@"{GameRootDirectory}\{path}", "*.btl*").Where(f => !f.EndsWith(".bak")).ToList();
+                    files.AddRange(Directory.GetFiles($@"{GameRootDirectory}\{path}", "*.btl").ToList());
+                    files.AddRange(Directory.GetFiles($@"{GameRootDirectory}\{path}", "*.btl.dcx").ToList());
                     if (Directory.Exists($"{GameModDirectory}\\{path}"))
                     {
                         // Check for additional BTLs the user has created.
-                        files.AddRange(Directory.GetFiles($@"{GameModDirectory}\{path}", "*.btl*").Where(f => !f.EndsWith(".bak")).ToList());
+                        files.AddRange(Directory.GetFiles($@"{GameModDirectory}\{path}", "*.btl").ToList());
+                        files.AddRange(Directory.GetFiles($@"{GameModDirectory}\{path}", "*.btl.dcx").ToList());
                         files = files.DistinctBy(f => f.Split("\\").Last()).ToList();
                     }
                 }
@@ -951,6 +955,10 @@ namespace StudioCore
             if (Type == GameType.EldenRing)
             {
                 // Elden Ring all maps have their own assets
+                amapid = mapid;
+            }
+            else if (Type == GameType.DemonsSouls)
+            {
                 amapid = mapid;
             }
             // Special case for chalice dungeon assets

@@ -21,10 +21,10 @@ namespace Veldrid.Vk
             : base(ref description)
         {
             _gd = gd;
-            VkDescriptorSetLayoutCreateInfo dslCI = new VkDescriptorSetLayoutCreateInfo();
             ResourceLayoutElementDescription[] elements = description.Elements;
             _descriptorTypes = new VkDescriptorType[elements.Length];
             VkDescriptorSetLayoutBinding* bindings = stackalloc VkDescriptorSetLayoutBinding[elements.Length];
+            VkDescriptorBindingFlags* flags = stackalloc VkDescriptorBindingFlags[elements.Length];
 
             uint uniformBufferCount = 0;
             uint sampledImageCount = 0;
@@ -34,11 +34,14 @@ namespace Veldrid.Vk
 
             for (uint i = 0; i < elements.Length; i++)
             {
-                bindings[i].binding = i;
-                bindings[i].descriptorCount = elements[i].DescriptorCount;
                 VkDescriptorType descriptorType = VkFormats.VdToVkDescriptorType(elements[i].Kind, elements[i].Options);
-                bindings[i].descriptorType = descriptorType;
-                bindings[i].stageFlags = VkFormats.VdToVkShaderStages(elements[i].Stages);
+                bindings[i] = new VkDescriptorSetLayoutBinding
+                {
+                    binding = i,
+                    descriptorCount = elements[i].DescriptorCount,
+                    descriptorType = descriptorType,
+                    stageFlags = VkFormats.VdToVkShaderStages(elements[i].Stages)
+                };
                 if ((elements[i].Options & ResourceLayoutElementOptions.DynamicBinding) != 0)
                 {
                     DynamicBufferCount += 1;
@@ -64,6 +67,15 @@ namespace Veldrid.Vk
                         storageBufferCount += elements[i].DescriptorCount;
                         break;
                 }
+
+                flags[i] = new VkDescriptorBindingFlags();
+                if ((elements[i].Options & ResourceLayoutElementOptions.VariableCount) != 0)
+                {
+                    flags[i] = VkDescriptorBindingFlags.VariableDescriptorCount;
+                    // UpdateAfterBind is needed for larger texture pools on Intel for some reason
+                    if (descriptorType == VkDescriptorType.SampledImage)
+                        flags[i] |= VkDescriptorBindingFlags.UpdateAfterBind;
+                }
             }
 
             DescriptorResourceCounts = new DescriptorResourceCounts(
@@ -73,9 +85,21 @@ namespace Veldrid.Vk
                 storageBufferCount,
                 storageImageCount);
 
-            dslCI.bindingCount = (uint)elements.Length;
-            dslCI.pBindings = bindings;
-
+            var bindingFlagsCI = new VkDescriptorSetLayoutBindingFlagsCreateInfo
+            {
+                sType = VkStructureType.DescriptorSetLayoutBindingFlagsCreateInfo,
+                bindingCount = (uint)elements.Length,
+                pBindingFlags = flags
+            };
+            
+            var dslCI = new VkDescriptorSetLayoutCreateInfo
+            {
+                sType = VkStructureType.DescriptorSetLayoutCreateInfo,
+                pNext = &bindingFlagsCI,
+                flags = VkDescriptorSetLayoutCreateFlags.UpdateAfterBindPool,
+                bindingCount = (uint)elements.Length,
+                pBindings = bindings
+            };
             VkResult result = vkCreateDescriptorSetLayout(_gd.Device, &dslCI, null, out _dsl);
             CheckResult(result);
         }

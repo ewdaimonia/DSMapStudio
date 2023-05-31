@@ -18,11 +18,12 @@ namespace Veldrid.Vk
 
         private VkInstance _instance;
         private VkPhysicalDevice _physicalDevice;
-        private VkDeviceMemoryManager _memoryManager;
+        private VmaAllocator _vmaAllocator;
         private VkPhysicalDeviceProperties _physicalDeviceProperties;
         private VkPhysicalDeviceFeatures _physicalDeviceFeatures;
         private VkPhysicalDeviceVulkan11Features _physicalDeviceFeatures11;
         private VkPhysicalDeviceVulkan12Features _physicalDeviceFeatures12;
+        private VkPhysicalDeviceVulkan13Features _physicalDeviceFeatures13;
         private VkPhysicalDeviceMemoryProperties _physicalDeviceMemProperties;
         private VkDevice _device;
         private uint _graphicsQueueIndex;
@@ -37,7 +38,7 @@ namespace Veldrid.Vk
         private readonly object _graphicsQueueLock = new object();
         private readonly object _transferQueueLock = new object();
         private VkDebugReportCallbackEXT _debugCallbackHandle;
-        private delegate uint DebugCallbackFunc(VkDebugReportFlagsEXT a, VkDebugReportObjectTypeEXT b, ulong @object, nuint location, int messageCode, byte* pLayerPrefix, byte* pMessage, void* pUserDat);
+        private delegate uint DebugCallbackFunc(VkDebugReportFlagsEXT a, VkDebugReportObjectTypeEXT b, ulong @object, nuint location, int messageCode, sbyte* pLayerPrefix, sbyte* pMessage, void* pUserDat);
         private DebugCallbackFunc _debugCallbackFunc;
         private bool _debugMarkerEnabled;
         private vkDebugMarkerSetObjectNameEXT_t _setObjectNameDelegate;
@@ -96,7 +97,7 @@ namespace Veldrid.Vk
         public uint GraphicsQueueIndex => _graphicsQueueIndex;
         public uint TransferQueueIndex => _transferQueueIndex;
         public uint PresentQueueIndex => _presentQueueIndex;
-        public VkDeviceMemoryManager MemoryManager => _memoryManager;
+        public VmaAllocator Allocator => _vmaAllocator;
         public VkDescriptorPoolManager DescriptorPoolManager => _descriptorPoolManager;
         public vkCmdDebugMarkerBeginEXT_t MarkerBegin => _markerBegin;
         public vkCmdDebugMarkerEndEXT_t MarkerEnd => _markerEnd;
@@ -127,12 +128,15 @@ namespace Veldrid.Vk
             CreatePhysicalDevice();
             CreateLogicalDevice(surface, options.PreferStandardClipSpaceYDirection, vkOptions);
 
-            _memoryManager = new VkDeviceMemoryManager(
-                _device,
-                _physicalDevice,
-                _physicalDeviceProperties.limits.bufferImageGranularity,
-                _getBufferMemoryRequirements2,
-                _getImageMemoryRequirements2);
+            var allocatorInfo = new VmaAllocatorCreateInfo
+            {
+                PhysicalDevice = _physicalDevice,
+                Device = _device,
+                Instance = _instance,
+                VulkanApiVersion = Vortice.Vulkan.VkVersion.Version_1_3
+            };
+            var result = Vma.vmaCreateAllocator(&allocatorInfo, out _vmaAllocator);
+            CheckResult(result);
 
             Features = new GraphicsDeviceFeatures(
                 computeShader: true,
@@ -210,16 +214,20 @@ namespace Veldrid.Vk
             CheckSubmittedFences();
 
             bool useExtraFence = fence != null;
-            VkSubmitInfo si = new VkSubmitInfo();
-            si.commandBufferCount = 1;
-            si.pCommandBuffers = &vkCB;
             VkPipelineStageFlags waitDstStageMask = VkPipelineStageFlags.ColorAttachmentOutput;
-            si.pWaitDstStageMask = &waitDstStageMask;
-
-            si.pWaitSemaphores = waitSemaphoresPtr;
-            si.waitSemaphoreCount = waitSemaphoreCount;
-            si.pSignalSemaphores = signalSemaphoresPtr;
-            si.signalSemaphoreCount = signalSemaphoreCount;
+            var cbSubmitInfo = new VkCommandBufferSubmitInfo
+            {
+                sType = VkStructureType.CommandBufferSubmitInfo,
+                commandBuffer = vkCB,
+                deviceMask = 0,
+            };
+            var si = new VkSubmitInfo2
+            {
+                sType = VkStructureType.SubmitInfo2,
+                flags = VkSubmitFlags.None,
+                commandBufferInfoCount = 1,
+                pCommandBufferInfos = &cbSubmitInfo,
+            };
 
             Vortice.Vulkan.VkFence vkFence = Vortice.Vulkan.VkFence.Null;
             Vortice.Vulkan.VkFence submissionFence = Vortice.Vulkan.VkFence.Null;
@@ -238,11 +246,11 @@ namespace Veldrid.Vk
             {
                 lock (_transferQueueLock)
                 {
-                    VkResult result = vkQueueSubmit(_transferQueue, 1, &si, vkFence);
+                    VkResult result = vkQueueSubmit2(_transferQueue, 1, &si, vkFence);
                     CheckResult(result);
                     if (useExtraFence)
                     {
-                        result = vkQueueSubmit(_transferQueue, 0, null, submissionFence);
+                        result = vkQueueSubmit2(_transferQueue, 0, null, submissionFence);
                         CheckResult(result);
                     }
                 }
@@ -251,11 +259,11 @@ namespace Veldrid.Vk
             {
                 lock (_graphicsQueueLock)
                 {
-                    VkResult result = vkQueueSubmit(_graphicsQueue, 1, &si, vkFence);
+                    VkResult result = vkQueueSubmit2(_graphicsQueue, 1, &si, vkFence);
                     CheckResult(result);
                     if (useExtraFence)
                     {
-                        result = vkQueueSubmit(_graphicsQueue, 0, null, submissionFence);
+                        result = vkQueueSubmit2(_graphicsQueue, 0, null, submissionFence);
                         CheckResult(result);
                     }
                 }
@@ -346,7 +354,10 @@ namespace Veldrid.Vk
             }
             else
             {
-                VkFenceCreateInfo fenceCI = new VkFenceCreateInfo();
+                VkFenceCreateInfo fenceCI = new VkFenceCreateInfo
+                {
+                    sType = VkStructureType.FenceCreateInfo
+                };
                 Vortice.Vulkan.VkFence newFence;
                 VkResult result = vkCreateFence(_device, &fenceCI, null, out newFence);
                 CheckResult(result);
@@ -358,11 +369,14 @@ namespace Veldrid.Vk
         {
             VkSwapchain vkSC = Util.AssertSubtype<Swapchain, VkSwapchain>(swapchain);
             VkSwapchainKHR deviceSwapchain = vkSC.DeviceSwapchain;
-            VkPresentInfoKHR presentInfo = new VkPresentInfoKHR();
-            presentInfo.swapchainCount = 1;
-            presentInfo.pSwapchains = &deviceSwapchain;
             uint imageIndex = vkSC.ImageIndex;
-            presentInfo.pImageIndices = &imageIndex;
+            var presentInfo = new VkPresentInfoKHR
+            {
+                sType = VkStructureType.PresentInfoKHR,
+                swapchainCount = 1,
+                pSwapchains = &deviceSwapchain,
+                pImageIndices = &imageIndex
+            };
 
             object presentLock = vkSC.PresentQueueIndex == _graphicsQueueIndex ? _graphicsQueueLock : vkSC;
             lock (presentLock)
@@ -443,39 +457,47 @@ namespace Veldrid.Vk
         {
             Debug.Assert(_setObjectNameDelegate != null);
 
-            VkDebugMarkerObjectNameInfoEXT nameInfo = new VkDebugMarkerObjectNameInfoEXT();
-            nameInfo.objectType = type;
-            nameInfo.@object = target;
-
             int byteCount = Encoding.UTF8.GetByteCount(name);
-            byte* utf8Ptr = stackalloc byte[byteCount + 1];
+            sbyte* utf8Ptr = stackalloc sbyte[byteCount + 1];
             fixed (char* namePtr = name)
             {
-                Encoding.UTF8.GetBytes(namePtr, name.Length, utf8Ptr, byteCount);
+                Encoding.UTF8.GetBytes(namePtr, name.Length, (byte*)utf8Ptr, byteCount);
             }
             utf8Ptr[byteCount] = 0;
-
-            nameInfo.pObjectName = utf8Ptr;
+            
+            var nameInfo = new VkDebugMarkerObjectNameInfoEXT
+            {
+                sType = VkStructureType.DebugMarkerObjectNameInfoEXT,
+                objectType = type,
+                @object = target,
+                pObjectName = utf8Ptr
+            };
             VkResult result = _setObjectNameDelegate(_device, &nameInfo);
             CheckResult(result);
         }
 
         private void CreateInstance(bool debug, VulkanDeviceOptions options)
         {
-            vkInitialize();
+            VkResult result = vkInitialize();
+            CheckResult(result);
+            if (result != VkResult.Success)
+            {
+                throw new VeldridException(
+                    "Vulkan initialization failed. Your GPU may not support Vulkan or you may not have a recent driver.");
+            }
 
             HashSet<string> availableInstanceLayers = new HashSet<string>(EnumerateInstanceLayers());
             HashSet<string> availableInstanceExtensions = new HashSet<string>(GetInstanceExtensions());
-
-            VkInstanceCreateInfo instanceCI = new VkInstanceCreateInfo();
-            VkApplicationInfo applicationInfo = new VkApplicationInfo();
-            applicationInfo.apiVersion = new Vortice.Vulkan.VkVersion(1, 2, 0);
-            applicationInfo.applicationVersion = new Vortice.Vulkan.VkVersion(1, 0, 0);
-            applicationInfo.engineVersion = new Vortice.Vulkan.VkVersion(1, 0, 0);
-            applicationInfo.pApplicationName = s_name;
-            applicationInfo.pEngineName = s_name;
-
-            instanceCI.pApplicationInfo = &applicationInfo;
+            
+            var applicationInfo = new VkApplicationInfo
+            {
+                sType = VkStructureType.ApplicationInfo,
+                apiVersion = new Vortice.Vulkan.VkVersion(1, 3, 0),
+                applicationVersion = new Vortice.Vulkan.VkVersion(1, 0, 0),
+                engineVersion = new Vortice.Vulkan.VkVersion(1, 0, 0),
+                pApplicationName = s_name.StringPtr,
+                pEngineName = s_name.StringPtr
+            };
 
             StackList<IntPtr, Size64Bytes> instanceExtensions = new StackList<IntPtr, Size64Bytes>();
             StackList<IntPtr, Size64Bytes> instanceLayers = new StackList<IntPtr, Size64Bytes>();
@@ -553,17 +575,22 @@ namespace Veldrid.Vk
                 }
             }
 
-            instanceCI.enabledExtensionCount = instanceExtensions.Count;
-            instanceCI.ppEnabledExtensionNames = (byte**)instanceExtensions.Data;
-
-            instanceCI.enabledLayerCount = instanceLayers.Count;
-            if (instanceLayers.Count > 0)
+            var instanceCI = new VkInstanceCreateInfo
             {
-                instanceCI.ppEnabledLayerNames = (byte**)instanceLayers.Data;
-            }
+                sType = VkStructureType.InstanceCreateInfo,
+                pApplicationInfo = &applicationInfo,
+                enabledExtensionCount = instanceExtensions.Count,
+                ppEnabledExtensionNames = (sbyte**)instanceExtensions.Data,
+                enabledLayerCount = instanceLayers.Count,
+                ppEnabledLayerNames = (instanceLayers.Count > 0) ? (sbyte**)instanceLayers.Data : null
+            };
 
-            VkResult result = vkCreateInstance(&instanceCI, null, out _instance);
+            result = vkCreateInstance(&instanceCI, null, out _instance);
             CheckResult(result);
+            if (result != VkResult.Success)
+            {
+                throw new VeldridException("Failed to create Vulkan instance.");
+            }
             vkLoadInstanceOnly(_instance);
 
             if (debug && debugReportExtensionAvailable)
@@ -587,13 +614,16 @@ namespace Veldrid.Vk
             Debug.WriteLine("Enabling Vulkan Debug callbacks.");
             _debugCallbackFunc = DebugCallback;
             IntPtr debugFunctionPtr = Marshal.GetFunctionPointerForDelegate(_debugCallbackFunc);
-            VkDebugReportCallbackCreateInfoEXT debugCallbackCI = new VkDebugReportCallbackCreateInfoEXT();
-            debugCallbackCI.flags = flags;
-            debugCallbackCI.pfnCallback = (delegate* unmanaged<VkDebugReportFlagsEXT, VkDebugReportObjectTypeEXT, ulong, nuint, int, byte*, byte*, void*, uint>)debugFunctionPtr;
+            var debugCallbackCI = new VkDebugReportCallbackCreateInfoEXT
+            {
+                sType = VkStructureType.DebugReportCallbackCreateInfoEXT,
+                flags = flags,
+                pfnCallback = (delegate* unmanaged<VkDebugReportFlagsEXT, VkDebugReportObjectTypeEXT, ulong, nuint, int, sbyte*, sbyte*, void*, uint>)debugFunctionPtr
+            };
             IntPtr createFnPtr;
             using (FixedUtf8String debugExtFnName = "vkCreateDebugReportCallbackEXT")
             {
-                createFnPtr = (IntPtr)vkGetInstanceProcAddr(_instance, debugExtFnName);
+                createFnPtr = (IntPtr)vkGetInstanceProcAddr(_instance, debugExtFnName.Span);
             }
             if (createFnPtr == IntPtr.Zero)
             {
@@ -611,11 +641,11 @@ namespace Veldrid.Vk
             ulong @object,
             nuint location,
             int messageCode,
-            byte* pLayerPrefix,
-            byte* pMessage,
+            sbyte* pLayerPrefix,
+            sbyte* pMessage,
             void* pUserData)
         {
-            string message = Util.GetString(pMessage);
+            string message = Util.GetString((byte*)pMessage);
             VkDebugReportFlagsEXT debugReportFlags = (VkDebugReportFlagsEXT)flags;
 
 #if DEBUG
@@ -649,28 +679,82 @@ namespace Veldrid.Vk
             fixed (VkPhysicalDevice* pPhysicalDevice = &physicalDevices[0])
                 vkEnumeratePhysicalDevices(_instance, &deviceCount, pPhysicalDevice);
             
-            // Try to find a discrete gpu and use that instead if we find one. Otherwise use the first
-            _physicalDevice = physicalDevices[0];
-            foreach (var device in physicalDevices)
+            // Sort the list of devices such that discrete devices have priority over integrated ones
+            int discreteCount = 0;
+            for (int i = 0; i < deviceCount; i++)
             {
-                vkGetPhysicalDeviceProperties(device, out var props);
+                vkGetPhysicalDeviceProperties(physicalDevices[i], out var props);
                 if (props.deviceType == VkPhysicalDeviceType.DiscreteGpu)
                 {
-                    _physicalDevice = device;
-                    break;
+                    // Push discrete GPUs to the top
+                    (physicalDevices[discreteCount], physicalDevices[i]) = (physicalDevices[i], physicalDevices[discreteCount]);
+                    discreteCount++;
                 }
             }
 
-            vkGetPhysicalDeviceProperties(_physicalDevice, out _physicalDeviceProperties);
-            string deviceName;
-            fixed (byte* utf8NamePtr = _physicalDeviceProperties.deviceName)
+            // Search for a GPU that supports required features
+            foreach (var device in physicalDevices)
             {
-                deviceName = Encoding.UTF8.GetString(utf8NamePtr, (int)VK_MAX_PHYSICAL_DEVICE_NAME_SIZE);
+                vkGetPhysicalDeviceProperties(device, out var physicalDeviceProperties);
+                string deviceName;
+                sbyte* utf8NamePtr = physicalDeviceProperties.deviceName;
+                deviceName = Encoding.UTF8.GetString((byte*)utf8NamePtr, (int)VK_MAX_PHYSICAL_DEVICE_NAME_SIZE);
+
+                var deviceVulkan13Features = new VkPhysicalDeviceVulkan13Features
+                {
+                    sType = VkStructureType.PhysicalDeviceVulkan13Features,
+                };
+                var deviceVulkan12Features = new VkPhysicalDeviceVulkan12Features
+                {
+                    sType = VkStructureType.PhysicalDeviceVulkan12Features,
+                    pNext = &deviceVulkan13Features,
+                };
+                var deviceVulkan11Features = new VkPhysicalDeviceVulkan11Features
+                {
+                    sType = VkStructureType.PhysicalDeviceVulkan11Features,
+                    pNext = &deviceVulkan12Features,
+                };
+                var deviceFeatures = new VkPhysicalDeviceFeatures2
+                {
+                    sType = VkStructureType.PhysicalDeviceFeatures2,
+                    pNext = &deviceVulkan11Features,
+                };
+
+                vkGetPhysicalDeviceFeatures2(device, &deviceFeatures);
+                vkGetPhysicalDeviceMemoryProperties(device, out var physicalDeviceMemProperties);
+                
+                // Check for required features
+                if (deviceFeatures.features.multiDrawIndirect != VkBool32.True ||
+                    deviceFeatures.features.drawIndirectFirstInstance != VkBool32.True ||
+                    deviceFeatures.features.shaderInt64 != VkBool32.True ||
+                    deviceFeatures.features.fragmentStoresAndAtomics != VkBool32.True)
+                    continue;
+                if (deviceVulkan11Features.storageBuffer16BitAccess != VkBool32.True)
+                    continue;
+                if (deviceVulkan12Features.drawIndirectCount != VkBool32.True ||
+                    deviceVulkan12Features.descriptorIndexing != VkBool32.True ||
+                    deviceVulkan12Features.descriptorBindingVariableDescriptorCount != VkBool32.True ||
+                    deviceVulkan12Features.runtimeDescriptorArray != VkBool32.True ||
+                    deviceVulkan12Features.descriptorBindingSampledImageUpdateAfterBind != VkBool32.True ||
+                    deviceVulkan12Features.shaderSampledImageArrayNonUniformIndexing != VkBool32.True)
+                    continue;
+                if (deviceVulkan13Features.synchronization2 != VkBool32.True ||
+                    deviceVulkan13Features.dynamicRendering != VkBool32.True ||
+                    deviceVulkan13Features.maintenance4 != VkBool32.True)
+                    continue;
+                
+                // We found a physical device with the required features
+                _physicalDevice = device;
+                _physicalDeviceMemProperties = physicalDeviceMemProperties;
+                _physicalDeviceFeatures = deviceFeatures.features;
+                _physicalDeviceFeatures11 = deviceVulkan11Features;
+                _physicalDeviceFeatures12 = deviceVulkan12Features;
+                _physicalDeviceFeatures13 = deviceVulkan13Features;
+                return;
             }
 
-            vkGetPhysicalDeviceFeatures(_physicalDevice, out _physicalDeviceFeatures);
-
-            vkGetPhysicalDeviceMemoryProperties(_physicalDevice, out _physicalDeviceMemProperties);
+            throw new VeldridException(
+                "Could not find a supported GPU. Your GPU may be too old or your drivers may be out of date.");
         }
 
         private void CreateLogicalDevice(VkSurfaceKHR surface, bool preferStandardClipY, VulkanDeviceOptions options)
@@ -684,44 +768,66 @@ namespace Veldrid.Vk
             int i = 0;
             foreach (uint index in familyIndices)
             {
-                VkDeviceQueueCreateInfo queueCreateInfo = new VkDeviceQueueCreateInfo();
-                queueCreateInfo.queueFamilyIndex = (index == _transferQueueIndex) ? _transferQueueIndex : _graphicsQueueIndex;
-                queueCreateInfo.queueCount = 1;
                 float priority = 1f;
-                queueCreateInfo.pQueuePriorities = &priority;
+                var queueCreateInfo = new VkDeviceQueueCreateInfo
+                {
+                    sType = VkStructureType.DeviceQueueCreateInfo,
+                    queueFamilyIndex = (index == _transferQueueIndex) ? _transferQueueIndex : _graphicsQueueIndex,
+                    queueCount = 1,
+                    pQueuePriorities = &priority
+                };
                 queueCreateInfos[i] = queueCreateInfo;
                 i += 1;
             }
 
-            VkPhysicalDeviceFeatures deviceFeatures = new VkPhysicalDeviceFeatures();
-            deviceFeatures.samplerAnisotropy = _physicalDeviceFeatures.samplerAnisotropy;
-            deviceFeatures.fillModeNonSolid = _physicalDeviceFeatures.fillModeNonSolid;
-            deviceFeatures.geometryShader = _physicalDeviceFeatures.geometryShader;
-            deviceFeatures.depthClamp = _physicalDeviceFeatures.depthClamp;
-            deviceFeatures.multiViewport = _physicalDeviceFeatures.multiViewport;
-            deviceFeatures.textureCompressionBC = _physicalDeviceFeatures.textureCompressionBC;
-            deviceFeatures.textureCompressionETC2 = _physicalDeviceFeatures.textureCompressionETC2;
-            deviceFeatures.multiDrawIndirect = _physicalDeviceFeatures.multiDrawIndirect;
-            deviceFeatures.drawIndirectFirstInstance = _physicalDeviceFeatures.drawIndirectFirstInstance;
-            deviceFeatures.shaderStorageImageMultisample = _physicalDeviceFeatures.shaderStorageImageMultisample;
-            deviceFeatures.shaderInt64 = VkBool32.True;
-            deviceFeatures.fragmentStoresAndAtomics = VkBool32.True;
+            var deviceFeatures = new VkPhysicalDeviceFeatures
+            {
+                samplerAnisotropy = _physicalDeviceFeatures.samplerAnisotropy,
+                fillModeNonSolid = _physicalDeviceFeatures.fillModeNonSolid,
+                geometryShader = _physicalDeviceFeatures.geometryShader,
+                depthClamp = _physicalDeviceFeatures.depthClamp,
+                multiViewport = _physicalDeviceFeatures.multiViewport,
+                textureCompressionBC = _physicalDeviceFeatures.textureCompressionBC,
+                textureCompressionETC2 = _physicalDeviceFeatures.textureCompressionETC2,
+                multiDrawIndirect = _physicalDeviceFeatures.multiDrawIndirect,
+                drawIndirectFirstInstance = _physicalDeviceFeatures.drawIndirectFirstInstance,
+                shaderStorageImageMultisample = _physicalDeviceFeatures.shaderStorageImageMultisample,
+                shaderInt64 = VkBool32.True,
+                fragmentStoresAndAtomics = VkBool32.True
+            };
 
-            VkPhysicalDeviceVulkan11Features deviceFeatures11 = new VkPhysicalDeviceVulkan11Features();
-            deviceFeatures11.storageBuffer16BitAccess = VkBool32.True;
+            var deviceFeatures11 = new VkPhysicalDeviceVulkan11Features
+            {
+                sType = VkStructureType.PhysicalDeviceVulkan11Features,
+                storageBuffer16BitAccess = VkBool32.True
+            };
 
-            VkPhysicalDeviceVulkan12Features deviceFeatures12 = new VkPhysicalDeviceVulkan12Features();
-            deviceFeatures12.descriptorIndexing = VkBool32.True;
-            deviceFeatures12.descriptorBindingVariableDescriptorCount = VkBool32.True;
-            deviceFeatures12.runtimeDescriptorArray = VkBool32.True;
-            deviceFeatures12.shaderSampledImageArrayNonUniformIndexing = VkBool32.True;
+            var deviceFeatures12 = new VkPhysicalDeviceVulkan12Features
+            {
+                sType = VkStructureType.PhysicalDeviceVulkan12Features,
+                drawIndirectCount = VkBool32.True,
+                descriptorIndexing = VkBool32.True,
+                descriptorBindingVariableDescriptorCount = VkBool32.True,
+                descriptorBindingSampledImageUpdateAfterBind = VkBool32.True,
+                runtimeDescriptorArray = VkBool32.True,
+                shaderSampledImageArrayNonUniformIndexing = VkBool32.True
+            };
+            
+            var deviceFeatures13 = new VkPhysicalDeviceVulkan13Features
+            {
+                sType = VkStructureType.PhysicalDeviceVulkan13Features,
+                synchronization2 = VkBool32.True,
+                dynamicRendering = VkBool32.True,
+                maintenance4 = VkBool32.True
+            };
             deviceFeatures11.pNext = &deviceFeatures12;
+            deviceFeatures12.pNext = &deviceFeatures13;
 
             int propertyCount = 0;
-            VkResult result = vkEnumerateDeviceExtensionProperties(_physicalDevice, (byte*)null, &propertyCount, null);
+            VkResult result = vkEnumerateDeviceExtensionProperties(_physicalDevice, (sbyte*)null, &propertyCount, null);
             CheckResult(result);
             VkExtensionProperties* properties = stackalloc VkExtensionProperties[(int)propertyCount];
-            result = vkEnumerateDeviceExtensionProperties(_physicalDevice, (byte*)null, &propertyCount, properties);
+            result = vkEnumerateDeviceExtensionProperties(_physicalDevice, (sbyte*)null, &propertyCount, properties);
             CheckResult(result);
 
             HashSet<string> requiredInstanceExtensions = new HashSet<string>(options.DeviceExtensions ?? Array.Empty<string>());
@@ -731,7 +837,7 @@ namespace Veldrid.Vk
             StackList<IntPtr> extensionNames = new StackList<IntPtr>();
             for (int property = 0; property < propertyCount; property++)
             {
-                string extensionName = Util.GetString(properties[property].extensionName);
+                string extensionName = Util.GetString((byte*)properties[property].extensionName);
                 if (extensionName == "VK_EXT_debug_marker")
                 {
                     extensionNames.Add(CommonStrings.VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
@@ -774,30 +880,31 @@ namespace Veldrid.Vk
                     $"The following Vulkan device extensions were not available: {missingList}");
             }
 
-            VkDeviceCreateInfo deviceCreateInfo = new VkDeviceCreateInfo();
-            deviceCreateInfo.queueCreateInfoCount = queueCreateInfosCount;
-            deviceCreateInfo.pQueueCreateInfos = queueCreateInfos;
-
-            deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
-
             StackList<IntPtr> layerNames = new StackList<IntPtr>();
             if (_standardValidationSupported)
             {
                 layerNames.Add(CommonStrings.StandardValidationLayerName);
             }
-            deviceCreateInfo.enabledLayerCount = layerNames.Count;
-            deviceCreateInfo.ppEnabledLayerNames = (byte**)layerNames.Data;
-
-            deviceCreateInfo.enabledExtensionCount = extensionNames.Count;
-            deviceCreateInfo.ppEnabledExtensionNames = (byte**)extensionNames.Data;
-
-            VkPhysicalDeviceFeatures2 physicalDeviceFeatures2 = new VkPhysicalDeviceFeatures2();
-            physicalDeviceFeatures2.sType = VkStructureType.PhysicalDeviceFeatures2;
-            physicalDeviceFeatures2.features = deviceFeatures;
-            deviceCreateInfo.pEnabledFeatures = null;
-            physicalDeviceFeatures2.pNext = &deviceFeatures11;
-            deviceCreateInfo.pNext = &physicalDeviceFeatures2;
             
+            var physicalDeviceFeatures2 = new VkPhysicalDeviceFeatures2
+            {
+                sType = VkStructureType.PhysicalDeviceFeatures2,
+                features = deviceFeatures,
+                pNext = &deviceFeatures11
+            };
+            
+            var deviceCreateInfo = new VkDeviceCreateInfo
+            {
+                sType = VkStructureType.DeviceCreateInfo,
+                queueCreateInfoCount = queueCreateInfosCount,
+                pQueueCreateInfos = queueCreateInfos,
+                pEnabledFeatures = null,
+                enabledLayerCount = layerNames.Count,
+                ppEnabledLayerNames = (sbyte**)layerNames.Data,
+                enabledExtensionCount = extensionNames.Count,
+                ppEnabledExtensionNames = (sbyte**)extensionNames.Data,
+                pNext = &physicalDeviceFeatures2
+            };
 
             result = vkCreateDevice(_physicalDevice, &deviceCreateInfo, null, out _device);
             CheckResult(result);
@@ -829,25 +936,25 @@ namespace Veldrid.Vk
         private IntPtr GetInstanceProcAddr(string name)
         {
             int byteCount = Encoding.UTF8.GetByteCount(name);
-            byte* utf8Ptr = stackalloc byte[byteCount + 1];
+            sbyte* utf8Ptr = stackalloc sbyte[byteCount + 1];
 
             fixed (char* namePtr = name)
             {
-                Encoding.UTF8.GetBytes(namePtr, name.Length, utf8Ptr, byteCount);
+                Encoding.UTF8.GetBytes(namePtr, name.Length, (byte*)utf8Ptr, byteCount);
             }
             utf8Ptr[byteCount] = 0;
 
-            return (IntPtr)vkGetInstanceProcAddr(_instance, utf8Ptr);
+            return (IntPtr)vkGetInstanceProcAddr(_instance, new ReadOnlySpan<sbyte>(utf8Ptr, byteCount + 1));
         }
 
         private IntPtr GetDeviceProcAddr(string name)
         {
             int byteCount = Encoding.UTF8.GetByteCount(name);
-            byte* utf8Ptr = stackalloc byte[byteCount + 1];
+            sbyte* utf8Ptr = stackalloc sbyte[byteCount + 1];
 
             fixed (char* namePtr = name)
             {
-                Encoding.UTF8.GetBytes(namePtr, name.Length, utf8Ptr, byteCount);
+                Encoding.UTF8.GetBytes(namePtr, name.Length, (byte*)utf8Ptr, byteCount);
             }
             utf8Ptr[byteCount] = 0;
 
@@ -915,25 +1022,32 @@ namespace Veldrid.Vk
 
         private void CreateGraphicsCommandPool()
         {
-            VkCommandPoolCreateInfo commandPoolCI = new VkCommandPoolCreateInfo();
-            commandPoolCI.flags = VkCommandPoolCreateFlags.ResetCommandBuffer;
-            commandPoolCI.queueFamilyIndex = _graphicsQueueIndex;
-            VkResult result = vkCreateCommandPool(_device, &commandPoolCI, null, out _graphicsCommandPool);
+            var commandPoolCI = new VkCommandPoolCreateInfo
+            {
+                sType = VkStructureType.CommandPoolCreateInfo,
+                flags = VkCommandPoolCreateFlags.ResetCommandBuffer,
+                queueFamilyIndex = _graphicsQueueIndex
+            };
+            var result = vkCreateCommandPool(_device, &commandPoolCI, null, out _graphicsCommandPool);
             CheckResult(result);
         }
 
         private void CreateTransferCommandPool()
         {
-            VkCommandPoolCreateInfo commandPoolCI = new VkCommandPoolCreateInfo();
-            commandPoolCI.flags = VkCommandPoolCreateFlags.ResetCommandBuffer;
-            commandPoolCI.queueFamilyIndex = _transferQueueIndex;
-            VkResult result = vkCreateCommandPool(_device, &commandPoolCI, null, out _transferCommandPool);
+            var commandPoolCI = new VkCommandPoolCreateInfo
+            {
+                sType = VkStructureType.CommandPoolCreateInfo,
+                flags = VkCommandPoolCreateFlags.ResetCommandBuffer,
+                queueFamilyIndex = _transferQueueIndex
+            };
+            var result = vkCreateCommandPool(_device, &commandPoolCI, null, out _transferCommandPool);
             CheckResult(result);
         }
 
         protected override MappedResource MapCore(MappableResource resource, MapMode mode, uint subresource)
         {
-            VkMemoryBlock memoryBlock = default(VkMemoryBlock);
+            VmaAllocation allocation = default(VmaAllocation);
+            VmaAllocationInfo info = default(VmaAllocationInfo);
             IntPtr mappedPtr = IntPtr.Zero;
             uint sizeInBytes;
             uint offset = 0;
@@ -941,30 +1055,32 @@ namespace Veldrid.Vk
             uint depthPitch = 0;
             if (resource is VkBuffer buffer)
             {
-                memoryBlock = buffer.Memory;
+                allocation = buffer.Allocation;
+                info = buffer.AllocationInfo;
                 sizeInBytes = buffer.SizeInBytes;
             }
             else
             {
                 VkTexture texture = Util.AssertSubtype<MappableResource, VkTexture>(resource);
                 VkSubresourceLayout layout = texture.GetSubresourceLayout(subresource);
-                memoryBlock = texture.Memory;
+                allocation = texture.Allocation;
+                info = texture.AllocationInfo;
                 sizeInBytes = (uint)layout.size;
                 offset = (uint)layout.offset;
                 rowPitch = (uint)layout.rowPitch;
                 depthPitch = (uint)layout.depthPitch;
             }
-
-            if (memoryBlock.DeviceMemory.Handle != 0)
+            
+            if (info.pMappedData != null)
             {
-                if (memoryBlock.IsPersistentMapped)
-                {
-                    mappedPtr = (IntPtr)memoryBlock.BlockMappedPointer;
-                }
-                else
-                {
-                    mappedPtr = _memoryManager.Map(memoryBlock);
-                }
+                mappedPtr = (IntPtr)info.pMappedData;
+            }
+            else
+            {
+                void* ptr;
+                VkResult result = Vma.vmaMapMemory(Allocator, allocation, &ptr);
+                CheckResult(result);
+                mappedPtr = (IntPtr)ptr;
             }
 
             byte* dataPtr = (byte*)mappedPtr.ToPointer() + offset;
@@ -980,20 +1096,23 @@ namespace Veldrid.Vk
 
         protected override void UnmapCore(MappableResource resource, uint subresource)
         {
-            VkMemoryBlock memoryBlock = default(VkMemoryBlock);
+            VmaAllocation allocation = default(VmaAllocation);
+            VmaAllocationInfo info = default(VmaAllocationInfo);
             if (resource is VkBuffer buffer)
             {
-                memoryBlock = buffer.Memory;
+                allocation = buffer.Allocation;
+                info = buffer.AllocationInfo;
             }
             else
             {
                 VkTexture tex = Util.AssertSubtype<MappableResource, VkTexture>(resource);
-                memoryBlock = tex.Memory;
+                allocation = tex.Allocation;
+                info = tex.AllocationInfo;
             }
 
-            if (memoryBlock.DeviceMemory.Handle != 0 && !memoryBlock.IsPersistentMapped)
+            if (info.pMappedData == null)
             {
-                vkUnmapMemory(_device, memoryBlock.DeviceMemory);
+                Vma.vmaUnmapMemory(Allocator, allocation);
             }
         }
 
@@ -1010,7 +1129,7 @@ namespace Veldrid.Vk
             {
                 _debugCallbackFunc = null;
                 FixedUtf8String debugExtFnName = "vkDestroyDebugReportCallbackEXT";
-                IntPtr destroyFuncPtr = (IntPtr)vkGetInstanceProcAddr(_instance, debugExtFnName);
+                IntPtr destroyFuncPtr = (IntPtr)vkGetInstanceProcAddr(_instance, debugExtFnName.Span);
                 vkDestroyDebugReportCallbackEXT_d destroyDel
                     = Marshal.GetDelegateForFunctionPointer<vkDestroyDebugReportCallbackEXT_d>(destroyFuncPtr);
                 destroyDel(_instance, _debugCallbackHandle, null);
@@ -1037,7 +1156,8 @@ namespace Veldrid.Vk
                 sharedPool.Destroy();
             }
 
-            _memoryManager.Dispose();
+            Vma.vmaDestroyAllocator(_vmaAllocator);
+            //_memoryManager.Dispose();
 
             VkResult result = vkDeviceWaitIdle(_device);
             CheckResult(result);
@@ -1151,16 +1271,16 @@ namespace Veldrid.Vk
             VkBuffer copySrcVkBuffer = null;
             IntPtr mappedPtr;
             byte* destPtr;
-            bool isPersistentMapped = vkBuffer.Memory.IsPersistentMapped;
+            bool isPersistentMapped = vkBuffer.AllocationInfo.pMappedData != null;
             if (isPersistentMapped)
             {
-                mappedPtr = (IntPtr)vkBuffer.Memory.BlockMappedPointer;
+                mappedPtr = (IntPtr)vkBuffer.AllocationInfo.pMappedData;
                 destPtr = (byte*)mappedPtr + bufferOffsetInBytes;
             }
             else
             {
                 copySrcVkBuffer = GetFreeStagingBuffer(sizeInBytes);
-                mappedPtr = (IntPtr)copySrcVkBuffer.Memory.BlockMappedPointer;
+                mappedPtr = (IntPtr)copySrcVkBuffer.AllocationInfo.pMappedData;
                 destPtr = (byte*)mappedPtr;
             }
 
@@ -1198,14 +1318,14 @@ namespace Veldrid.Vk
 
         private IntPtr MapBuffer(VkBuffer buffer, uint numBytes)
         {
-            if (buffer.Memory.IsPersistentMapped)
+            if (buffer.AllocationInfo.pMappedData != null)
             {
-                return (IntPtr)buffer.Memory.BlockMappedPointer;
+                return (IntPtr)buffer.AllocationInfo.pMappedData;
             }
             else
             {
                 void* mappedPtr;
-                VkResult result = vkMapMemory(Device, buffer.Memory.DeviceMemory, buffer.Memory.Offset, numBytes, 0, &mappedPtr);
+                VkResult result = Vma.vmaMapMemory(Allocator, buffer.Allocation, &mappedPtr);
                 CheckResult(result);
                 return (IntPtr)mappedPtr;
             }
@@ -1213,9 +1333,9 @@ namespace Veldrid.Vk
 
         private void UnmapBuffer(VkBuffer buffer)
         {
-            if (!buffer.Memory.IsPersistentMapped)
+            if (buffer.AllocationInfo.pMappedData == null)
             {
-                vkUnmapMemory(Device, buffer.Memory.DeviceMemory);
+                Vma.vmaUnmapMemory(Allocator, buffer.Allocation);
             }
         }
 
@@ -1236,10 +1356,9 @@ namespace Veldrid.Vk
             bool isStaging = (vkTex.Usage & TextureUsage.Staging) != 0;
             if (isStaging)
             {
-                VkMemoryBlock memBlock = vkTex.Memory;
                 uint subresource = texture.CalculateSubresource(mipLevel, arrayLayer);
                 VkSubresourceLayout layout = vkTex.GetSubresourceLayout(subresource);
-                byte* imageBasePtr = (byte*)memBlock.BlockMappedPointer + layout.offset;
+                byte* imageBasePtr = (byte*)vkTex.AllocationInfo.pMappedData + layout.offset;
 
                 uint srcRowPitch = FormatHelpers.GetRowPitch(width, texture.Format);
                 uint srcDepthPitch = FormatHelpers.GetDepthPitch(srcRowPitch, height, texture.Format);
@@ -1280,7 +1399,7 @@ namespace Veldrid.Vk
                 for (int i = 0; i < _availableStagingTextures.Count; i++)
                 {
                     VkTexture tex = _availableStagingTextures[i];
-                    if (tex.Memory.Size >= totalSize)
+                    if (tex.AllocationInfo.size >= totalSize)
                     {
                         _availableStagingTextures.RemoveAt(i);
                         tex.SetStagingDimensions(width, height, depth, format);
@@ -1356,17 +1475,22 @@ namespace Veldrid.Vk
             {
                 return false;
             }
+            
+            var applicationInfo = new VkApplicationInfo
+            {
+                sType = VkStructureType.ApplicationInfo,
+                apiVersion = new Vortice.Vulkan.VkVersion(1, 2, 0),
+                applicationVersion = new Vortice.Vulkan.VkVersion(1, 0, 0),
+                engineVersion = new Vortice.Vulkan.VkVersion(1, 0, 0),
+                pApplicationName = (sbyte*)s_name.StringPtr,
+                pEngineName = (sbyte*)s_name.StringPtr
+            };
 
-            VkInstanceCreateInfo instanceCI = new VkInstanceCreateInfo();
-            VkApplicationInfo applicationInfo = new VkApplicationInfo();
-            applicationInfo.apiVersion = new Vortice.Vulkan.VkVersion(1, 2, 0);
-            applicationInfo.applicationVersion = new Vortice.Vulkan.VkVersion(1, 0, 0);
-            applicationInfo.engineVersion = new Vortice.Vulkan.VkVersion(1, 0, 0);
-            applicationInfo.pApplicationName = s_name;
-            applicationInfo.pEngineName = s_name;
-
-            instanceCI.pApplicationInfo = &applicationInfo;
-
+            var instanceCI = new VkInstanceCreateInfo
+            {
+                sType = VkStructureType.InstanceCreateInfo,
+                pApplicationInfo = &applicationInfo
+            };
             VkResult result = vkCreateInstance(&instanceCI, null, out VkInstance testInstance);
             if (result != VkResult.Success)
             {
@@ -1487,16 +1611,22 @@ namespace Veldrid.Vk
                 _gd = gd;
                 IsCached = isCached;
 
-                VkCommandPoolCreateInfo commandPoolCI = new VkCommandPoolCreateInfo();
-                commandPoolCI.flags = VkCommandPoolCreateFlags.Transient | VkCommandPoolCreateFlags.ResetCommandBuffer;
-                commandPoolCI.queueFamilyIndex = _gd.GraphicsQueueIndex;
+                var commandPoolCI = new VkCommandPoolCreateInfo
+                {
+                    sType = VkStructureType.CommandPoolCreateInfo,
+                    flags = VkCommandPoolCreateFlags.Transient | VkCommandPoolCreateFlags.ResetCommandBuffer,
+                    queueFamilyIndex = _gd.GraphicsQueueIndex
+                };
                 VkResult result = vkCreateCommandPool(_gd.Device, &commandPoolCI, null, out _pool);
                 CheckResult(result);
 
-                VkCommandBufferAllocateInfo allocateInfo = new VkCommandBufferAllocateInfo();
-                allocateInfo.commandBufferCount = 1;
-                allocateInfo.level = VkCommandBufferLevel.Primary;
-                allocateInfo.commandPool = _pool;
+                var allocateInfo = new VkCommandBufferAllocateInfo
+                {
+                    sType = VkStructureType.CommandBufferAllocateInfo,
+                    commandBufferCount = 1,
+                    level = VkCommandBufferLevel.Primary,
+                    commandPool = _pool
+                };
                 fixed (VkCommandBuffer *cbp = &_cb)
                     result = vkAllocateCommandBuffers(_gd.Device, &allocateInfo, cbp);
                 CheckResult(result);
@@ -1504,8 +1634,11 @@ namespace Veldrid.Vk
 
             public VkCommandBuffer BeginNewCommandBuffer()
             {
-                VkCommandBufferBeginInfo beginInfo = new VkCommandBufferBeginInfo();
-                beginInfo.flags = VkCommandBufferUsageFlags.OneTimeSubmit;
+                var beginInfo = new VkCommandBufferBeginInfo
+                {
+                    sType = VkStructureType.CommandBufferBeginInfo,
+                    flags = VkCommandBufferUsageFlags.OneTimeSubmit
+                };
                 VkResult result = vkBeginCommandBuffer(_cb, &beginInfo);
                 CheckResult(result);
 

@@ -10,7 +10,8 @@ namespace Veldrid.Vk
     {
         private readonly VkGraphicsDevice _gd;
         private readonly VkImage _optimalImage;
-        private readonly VkMemoryBlock _memoryBlock;
+        private readonly VmaAllocation _allocation;
+        private readonly VmaAllocationInfo _allocationInfo;
         private readonly Vortice.Vulkan.VkBuffer _stagingBuffer;
         private PixelFormat _format; // Static for regular images -- may change for shared staging images
         private readonly uint _actualImageArrayLayers;
@@ -41,7 +42,8 @@ namespace Veldrid.Vk
 
         public VkImage OptimalDeviceImage => _optimalImage;
         public Vortice.Vulkan.VkBuffer StagingBuffer => _stagingBuffer;
-        public VkMemoryBlock Memory => _memoryBlock;
+        public VmaAllocation Allocation => _allocation;
+        public VmaAllocationInfo AllocationInfo => _allocationInfo;
 
         public VkFormat VkFormat { get; }
         public VkSampleCountFlags VkSampleCount { get; }
@@ -74,61 +76,42 @@ namespace Veldrid.Vk
 
             if (!isStaging)
             {
-                VkImageCreateInfo imageCI = new VkImageCreateInfo();
-                imageCI.mipLevels = MipLevels;
-                imageCI.arrayLayers = _actualImageArrayLayers;
-                imageCI.imageType = VkFormats.VdToVkTextureType(Type);
-                imageCI.extent.width = Width;
-                imageCI.extent.height = Height;
-                imageCI.extent.depth = Depth;
-                imageCI.initialLayout = VkImageLayout.Preinitialized;
-                imageCI.usage = VkFormats.VdToVkTextureUsage(Usage);
-                imageCI.tiling = isStaging ? VkImageTiling.Linear : VkImageTiling.Optimal;
-                imageCI.format = VkFormat;
-                imageCI.flags = VkImageCreateFlags.MutableFormat;
+                var imageCI = new VkImageCreateInfo
+                {
+                    sType = VkStructureType.ImageCreateInfo,
+                    mipLevels = MipLevels,
+                    arrayLayers = _actualImageArrayLayers,
+                    imageType = VkFormats.VdToVkTextureType(Type),
+                    extent = new VkExtent3D
+                    {
+                        width = Width,
+                        height = Height,
+                        depth = Depth
+                    },
+                    initialLayout = VkImageLayout.Preinitialized,
+                    usage = VkFormats.VdToVkTextureUsage(Usage),
+                    tiling = isStaging ? VkImageTiling.Linear : VkImageTiling.Optimal,
+                    format = VkFormat,
+                    flags = VkImageCreateFlags.MutableFormat,
+                    samples = VkSampleCount
+                };
 
-                imageCI.samples = VkSampleCount;
                 if (isCubemap)
                 {
                     imageCI.flags |= VkImageCreateFlags.CubeCompatible;
                 }
 
+                var allocationCI = new VmaAllocationCreateInfo
+                {
+                    usage = VmaMemoryUsage.AutoPreferDevice
+                };
+                VmaAllocationInfo info;
+                VkResult result = Vma.vmaCreateImage(gd.Allocator, &imageCI, &allocationCI, out _optimalImage,
+                    out _allocation, &info);
+                CheckResult(result);
+                _allocationInfo = info;
+                
                 uint subresourceCount = MipLevels * _actualImageArrayLayers * Depth;
-                VkResult result = vkCreateImage(gd.Device, &imageCI, null, out _optimalImage);
-                CheckResult(result);
-
-                VkMemoryRequirements memoryRequirements;
-                bool prefersDedicatedAllocation;
-                if (_gd.GetImageMemoryRequirements2 != null)
-                {
-                    VkImageMemoryRequirementsInfo2 memReqsInfo2 = new VkImageMemoryRequirementsInfo2();
-                    memReqsInfo2.image = _optimalImage;
-                    VkMemoryRequirements2 memReqs2 = new VkMemoryRequirements2();
-                    VkMemoryDedicatedRequirements dedicatedReqs = new VkMemoryDedicatedRequirements();
-                    memReqs2.pNext = &dedicatedReqs;
-                    _gd.GetImageMemoryRequirements2(_gd.Device, &memReqsInfo2, &memReqs2);
-                    memoryRequirements = memReqs2.memoryRequirements;
-                    prefersDedicatedAllocation = dedicatedReqs.prefersDedicatedAllocation || dedicatedReqs.requiresDedicatedAllocation;
-                }
-                else
-                {
-                    vkGetImageMemoryRequirements(gd.Device, _optimalImage, out memoryRequirements);
-                    prefersDedicatedAllocation = false;
-                }
-
-                VkMemoryBlock memoryToken = gd.MemoryManager.Allocate(
-                    gd.PhysicalDeviceMemProperties,
-                    memoryRequirements.memoryTypeBits,
-                    VkMemoryPropertyFlags.DeviceLocal,
-                    false,
-                    memoryRequirements.size,
-                    memoryRequirements.alignment,
-                    prefersDedicatedAllocation,
-                    _optimalImage,
-                    Vortice.Vulkan.VkBuffer.Null);
-                _memoryBlock = memoryToken;
-                result = vkBindImageMemory(gd.Device, _optimalImage, _memoryBlock.DeviceMemory, _memoryBlock.Offset);
-                CheckResult(result);
 
                 _imageLayouts = new VkImageLayout[subresourceCount];
                 for (int i = 0; i < _imageLayouts.Length; i++)
@@ -156,44 +139,24 @@ namespace Veldrid.Vk
                 }
                 stagingSize *= ArrayLayers;
 
-                VkBufferCreateInfo bufferCI = new VkBufferCreateInfo();
-                bufferCI.usage = VkBufferUsageFlags.TransferSrc | VkBufferUsageFlags.TransferDst;
-                bufferCI.size = stagingSize;
-                VkResult result = vkCreateBuffer(_gd.Device, &bufferCI, null, out _stagingBuffer);
-                CheckResult(result);
-
-                VkMemoryRequirements bufferMemReqs;
-                bool prefersDedicatedAllocation;
-                if (_gd.GetBufferMemoryRequirements2 != null)
+                var bufferCI = new VkBufferCreateInfo
                 {
-                    VkBufferMemoryRequirementsInfo2 memReqInfo2 = new VkBufferMemoryRequirementsInfo2();
-                    memReqInfo2.buffer = _stagingBuffer;
-                    VkMemoryRequirements2 memReqs2 = new VkMemoryRequirements2();
-                    VkMemoryDedicatedRequirements dedicatedReqs = new VkMemoryDedicatedRequirements();
-                    memReqs2.pNext = &dedicatedReqs;
-                    _gd.GetBufferMemoryRequirements2(_gd.Device, &memReqInfo2, &memReqs2);
-                    bufferMemReqs = memReqs2.memoryRequirements;
-                    prefersDedicatedAllocation = dedicatedReqs.prefersDedicatedAllocation || dedicatedReqs.requiresDedicatedAllocation;
-                }
-                else
+                    sType = VkStructureType.BufferCreateInfo,
+                    usage = VkBufferUsageFlags.TransferSrc | VkBufferUsageFlags.TransferDst,
+                    size = stagingSize
+                };
+                
+                var allocationCI = new VmaAllocationCreateInfo
                 {
-                    vkGetBufferMemoryRequirements(gd.Device, _stagingBuffer, out bufferMemReqs);
-                    prefersDedicatedAllocation = false;
-                }
+                    flags = VmaAllocationCreateFlags.HostAccessRandom | VmaAllocationCreateFlags.Mapped,
+                    usage = VmaMemoryUsage.AutoPreferHost
+                };
 
-                _memoryBlock = _gd.MemoryManager.Allocate(
-                    _gd.PhysicalDeviceMemProperties,
-                    bufferMemReqs.memoryTypeBits,
-                    VkMemoryPropertyFlags.HostVisible | VkMemoryPropertyFlags.HostCoherent,
-                    true,
-                    bufferMemReqs.size,
-                    bufferMemReqs.alignment,
-                    prefersDedicatedAllocation,
-                    VkImage.Null,
-                    _stagingBuffer);
-
-                result = vkBindBufferMemory(_gd.Device, _stagingBuffer, _memoryBlock.DeviceMemory, _memoryBlock.Offset);
+                VmaAllocationInfo allocationInfo;
+                VkResult result = Vma.vmaCreateBuffer(gd.Allocator, &bufferCI, &allocationCI, out _stagingBuffer,
+                    out _allocation, &allocationInfo);
                 CheckResult(result);
+                _allocationInfo = allocationInfo;
             }
 
             ClearIfRenderTarget();
@@ -394,16 +357,11 @@ namespace Veldrid.Vk
                 bool isStaging = (Usage & TextureUsage.Staging) == TextureUsage.Staging;
                 if (isStaging)
                 {
-                    vkDestroyBuffer(_gd.Device, _stagingBuffer, null);
+                    Vma.vmaDestroyBuffer(_gd.Allocator, _stagingBuffer, _allocation);
                 }
                 else
                 {
-                    vkDestroyImage(_gd.Device, _optimalImage, null);
-                }
-
-                if (_memoryBlock.DeviceMemory.Handle != 0)
-                {
-                    _gd.MemoryManager.Free(_memoryBlock);
+                    Vma.vmaDestroyImage(_gd.Allocator, _optimalImage, _allocation);
                 }
             }
         }
