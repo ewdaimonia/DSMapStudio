@@ -5,12 +5,14 @@ using StudioCore.Resource;
 using StudioCore.Scene;
 using System;
 using System.Collections.Generic;
+using System.DirectoryServices.ActiveDirectory;
 using System.Linq;
 using System.Numerics;
 using System.Windows.Forms;
 using Veldrid;
 using Veldrid.Sdl2;
 using Veldrid.Utilities;
+using static SoulsFormats.DRB.Shape;
 
 namespace StudioCore.MsbEditor
 {
@@ -58,6 +60,7 @@ namespace StudioCore.MsbEditor
         private float YPosOffset = 0;
         private float ZPosOffset = 0;
         private int IsOverworld = 0;
+        private string MassCloneEntityKeyword = "";
 
         private static object _lock_PauseUpdate = new object();
         private bool _PauseUpdate;
@@ -373,6 +376,66 @@ namespace StudioCore.MsbEditor
             EditorActionManager.ExecuteAction(action);
         }
 
+        private void CloneRepeatingAreaMapUI()
+        {
+            ImGui.Text("Duplicate keyword entities to specific map");
+            ImGui.SameLine();
+            ImGui.TextColored(new Vector4(1.0f, 1.0f, 1.0f, 0.5f), $" <{KeyBindings.Current.Map_DuplicateToMap.HintText}>");
+
+            if (ImGui.BeginCombo("Targeted Map", _dupeSelectionTargetedMap.Item1))
+            {
+                foreach (var obj in Universe.LoadedObjectContainers)
+                {
+                    if (obj.Value != null)
+                    {
+                        if (ImGui.Selectable(obj.Key))
+                        {
+                            _dupeSelectionTargetedMap = (obj.Key, obj.Value);
+                            break;
+                        }
+                    }
+                }
+                ImGui.EndCombo();
+            }
+            if (_dupeSelectionTargetedMap.Item2 == null)
+                return;
+
+            Map targetMap = (Map)_dupeSelectionTargetedMap.Item2;
+
+            var sel = _selection.GetFilteredSelection<MapEntity>().ToList();
+
+            if (sel.Any(e => e.WrappedObject is BTL.Light))
+            {
+                if (ImGui.BeginCombo("Targeted BTL", _dupeSelectionTargetedParent.Item1))
+                {
+                    foreach (Entity btl in targetMap.BTLParents)
+                    {
+                        var ad = (AssetDescription)btl.WrappedObject;
+                        if (ImGui.Selectable(ad.AssetName))
+                        {
+                            _dupeSelectionTargetedParent = (ad.AssetName, btl);
+                            break;
+                        }
+                    }
+                    ImGui.EndCombo();
+                }
+                if (_dupeSelectionTargetedParent.Item2 == null)
+                    return;
+            }
+
+            if (ImGui.Button("Duplicate"))
+            {
+                Entity? targetParent = _dupeSelectionTargetedParent.Item2;
+
+                var action = new CloneMapObjectsAction(Universe, RenderScene, sel, true, targetMap, targetParent);
+                EditorActionManager.ExecuteAction(action);
+                _dupeSelectionTargetedMap = ("None", null);
+                _dupeSelectionTargetedParent = ("None", null);
+                // Closes popup/menu bar
+                ImGui.CloseCurrentPopup();
+            }
+        }
+
         private void DuplicateToTargetMapUI()
         {
             ImGui.Text("Duplicate selection to specific map");
@@ -456,74 +519,6 @@ namespace StudioCore.MsbEditor
                     var action = new CloneMapObjectsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true);
                     EditorActionManager.ExecuteAction(action);
                 }
-                if (ImGui.InputInt("Dup Increment", ref DupIncrement, 1000, 100))
-                {
-                    this.DupIncrement = DupIncrement;
-                }
-                if (ImGui.MenuItem("Duplicate and Increment IDs", "Ctrl+L", false, _selection.IsSelection()))
-                {
-                    var action = new CloneMapObjectsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, DupIncrement);
-                    EditorActionManager.ExecuteAction(action);
-                }
-                if (ImGui.InputInt("XColumns", ref XWidth, 1, 10))
-                {
-                    this.XWidth = XWidth;
-                }
-                if (ImGui.InputInt("YRows", ref YHeight, 1, 10))
-                {
-                    this.YHeight = YHeight;
-                }
-                if (ImGui.InputInt("ZLevels", ref ZDepth, 1, 10))
-                {
-                    this.ZDepth = ZDepth;
-                }
-                if (ImGui.InputInt("XIdOffset", ref XIdOffset, 1, 10))
-                {
-                    this.XIdOffset = XIdOffset;
-                }
-                if (ImGui.InputInt("YIdOffset", ref YIdOffset, 1, 10))
-                {
-                    this.YIdOffset = YIdOffset;
-                }
-                if (ImGui.InputInt("ZIdOffset", ref ZIdOffset, 1, 10))
-                {
-                    this.ZIdOffset = ZIdOffset;
-                }
-                if (ImGui.InputFloat("XPosOffset", ref XPosOffset))
-                {
-                    this.XPosOffset = XPosOffset;
-                }
-                if (ImGui.InputFloat("YPosOffset", ref YPosOffset))
-                {
-                    this.YPosOffset = YPosOffset;
-                }
-                if (ImGui.InputFloat("ZPosOffset", ref ZPosOffset))
-                {
-                    this.ZPosOffset = ZPosOffset;
-                }
-                if (ImGui.InputInt("Is overworld?", ref IsOverworld, 1, 10))
-                {
-                    this.IsOverworld = IsOverworld;
-                }
-                if (ImGui.MenuItem("Generate Grid Dungeon", "Ctrl+J", false, _selection.IsSelection()))
-                {
-                    var action = new GenerateGridObjectsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, XWidth, YHeight, ZDepth, XIdOffset, YIdOffset, ZIdOffset, XPosOffset, YPosOffset, ZPosOffset, IsOverworld);
-                    EditorActionManager.ExecuteAction(action);
-                }
-                if (ImGui.MenuItem("Delete Autogenned Entities", "Ctrl+T", false, _selection.IsSelection()))
-                {
-                    var loadedMaps = Universe.LoadedObjectContainers.Values.Where(x => x != null);
-                    if (_createEntityMapIndex >= loadedMaps.Count())
-                        _createEntityMapIndex = 0;
-                    if(loadedMaps.Count() != 0)
-                    {
-                        ImGui.Combo("Target Map", ref _createEntityMapIndex, loadedMaps.Select(e => e.Name).ToArray(), loadedMaps.Count());
-
-                        Map map = (Map)loadedMaps.ElementAt(_createEntityMapIndex);
-                        var action = new DeleteAutogennedEntities(Universe, map);
-                        EditorActionManager.ExecuteAction(action);
-                    }
-                }
 
                 if (ImGui.BeginMenu($"Duplicate to Map", _selection.IsSelection()))
                 {
@@ -588,6 +583,176 @@ namespace StudioCore.MsbEditor
                 if (ImGui.MenuItem("Move Selection to Camera", KeyBindings.Current.Map_MoveSelectionToCamera.HintText, false, _selection.IsSelection()))
                 {
                     MoveSelectionToCamera();
+                }
+
+                ImGui.Separator();
+
+                bool experimentalMenuOpen = true;
+                if (ImGui.Button($"Experimental Cloning Menu"))
+                {
+                    ImGui.OpenPopup("ExperimentalCloningMenu1");
+                }
+                if (ImGui.BeginPopupModal("ExperimentalCloningMenu1", ref experimentalMenuOpen, ImGuiWindowFlags.AlwaysAutoResize))
+                {
+                    if (ImGui.BeginMenuBar())
+                    {
+                        ImGui.EndMenuBar();
+                    }
+                    //content
+                    if (ImGui.InputInt("Dup Increment", ref DupIncrement, 1000, 100))
+                    {
+                        this.DupIncrement = DupIncrement;
+                    }
+                    ImGui.Separator();
+                    if (ImGui.MenuItem("Duplicate and Increment IDs", null, false, _selection.IsSelection()))
+                    {
+                        var action = new CloneMapObjectsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, DupIncrement);
+                        EditorActionManager.ExecuteAction(action);
+                    }
+                    if (ImGui.InputInt("XColumns", ref XWidth, 1, 10))
+                    {
+                        this.XWidth = XWidth;
+                    }
+                    if (ImGui.InputInt("YRows", ref YHeight, 1, 10))
+                    {
+                        this.YHeight = YHeight;
+                    }
+                    if (ImGui.InputInt("ZLevels", ref ZDepth, 1, 10))
+                    {
+                        this.ZDepth = ZDepth;
+                    }
+                    if (ImGui.InputInt("XIdOffset", ref XIdOffset, 1, 10))
+                    {
+                        this.XIdOffset = XIdOffset;
+                    }
+                    if (ImGui.InputInt("YIdOffset", ref YIdOffset, 1, 10))
+                    {
+                        this.YIdOffset = YIdOffset;
+                    }
+                    if (ImGui.InputInt("ZIdOffset", ref ZIdOffset, 1, 10))
+                    {
+                        this.ZIdOffset = ZIdOffset;
+                    }
+                    if (ImGui.InputFloat("XPosOffset", ref XPosOffset))
+                    {
+                        this.XPosOffset = XPosOffset;
+                    }
+                    if (ImGui.InputFloat("YPosOffset", ref YPosOffset))
+                    {
+                        this.YPosOffset = YPosOffset;
+                    }
+                    if (ImGui.InputFloat("ZPosOffset", ref ZPosOffset))
+                    {
+                        this.ZPosOffset = ZPosOffset;
+                    }
+                    if (ImGui.InputInt("Is overworld?", ref IsOverworld, 1, 10))
+                    {
+                        this.IsOverworld = IsOverworld;
+                    }
+                    ImGui.Separator();
+                    if (ImGui.MenuItem("Generate Grid Dungeon", null, false, _selection.IsSelection()))
+                    {
+                        var action = new GenerateGridObjectsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, XWidth, YHeight, ZDepth, XIdOffset, YIdOffset, ZIdOffset, XPosOffset, YPosOffset, ZPosOffset, IsOverworld);
+                        EditorActionManager.ExecuteAction(action);
+                    }
+                    if (ImGui.MenuItem("Delete Autogenned Entities", null, false, _selection.IsSelection()))
+                    {
+                        var loadedMaps = Universe.LoadedObjectContainers.Values.Where(x => x != null);
+                        if (_createEntityMapIndex >= loadedMaps.Count())
+                            _createEntityMapIndex = 0;
+                        if (loadedMaps.Count() != 0)
+                        {
+                            ImGui.Combo("Target Map", ref _createEntityMapIndex, loadedMaps.Select(e => e.Name).ToArray(), loadedMaps.Count());
+
+                            Map map = (Map)loadedMaps.ElementAt(_createEntityMapIndex);
+                            var action = new DeleteAutogennedEntities(Universe, map);
+                            EditorActionManager.ExecuteAction(action);
+                        }
+                    }
+                    ImGui.Separator();
+                    ImGui.Text("Mass Clone to Adjacent Maps");
+                    //ImGui.Text("Entity Keyword");
+                    if (ImGui.InputText("Entity Keyword", ref MassCloneEntityKeyword, 64))
+                    {
+                        //PropertyType = Universe.GetPropertyType(PropertyName);
+                        //ValidType = InitializeSearchValue();
+                        //searchFieldChanged = true;
+                    }
+                    if (ImGui.MenuItem("Mass Select by Keyword", null, false, MassCloneEntityKeyword != ""))
+                    {
+                        var loadedMaps = Universe.LoadedObjectContainers.Values.Where(x => x != null);
+                        if (_createEntityMapIndex >= loadedMaps.Count())
+                            _createEntityMapIndex = 0;
+                        if (loadedMaps.Count() != 0)
+                        {
+                            ImGui.Combo("Target Map", ref _createEntityMapIndex, loadedMaps.Select(e => e.Name).ToArray(), loadedMaps.Count());
+
+                            Map map = (Map)loadedMaps.ElementAt(_createEntityMapIndex);
+                            var action = new MassSelectEntitiesBySubstring(Universe, map, MassCloneEntityKeyword);
+                            EditorActionManager.ExecuteAction(action);
+                        }
+                    }
+
+                    if (ImGui.BeginCombo("Targeted Map", _dupeSelectionTargetedMap.Item1))
+                    {
+                        foreach (var obj in Universe.LoadedObjectContainers)
+                        {
+                            if (obj.Value != null)
+                            {
+                                if (ImGui.Selectable(obj.Key))
+                                {
+                                    _dupeSelectionTargetedMap = (obj.Key, obj.Value);
+                                    break;
+                                }
+                            }
+                        }
+                        ImGui.EndCombo();
+                    }
+                    //if (_dupeSelectionTargetedMap.Item2 == null)
+                    //    return;
+
+                    Map targetMap = (Map)_dupeSelectionTargetedMap.Item2;
+
+                    var sel = _selection.GetFilteredSelection<MapEntity>().ToList();
+
+                    if (sel.Any(e => e.WrappedObject is BTL.Light))
+                    {
+                        if (ImGui.BeginCombo("Targeted BTL", _dupeSelectionTargetedParent.Item1))
+                        {
+                            foreach (Entity btl in targetMap.BTLParents)
+                            {
+                                var ad = (AssetDescription)btl.WrappedObject;
+                                if (ImGui.Selectable(ad.AssetName))
+                                {
+                                    _dupeSelectionTargetedParent = (ad.AssetName, btl);
+                                    break;
+                                }
+                            }
+                            ImGui.EndCombo();
+                        }
+                        //if (_dupeSelectionTargetedParent.Item2 == null)
+                        //    return;
+                    }
+
+                    if (ImGui.Button("Clone and offset to secondary map"))
+                    {
+                        Entity? targetParent = _dupeSelectionTargetedParent.Item2;
+
+                        var action = new CloneMapObjectsAction(Universe, RenderScene, sel, true, targetMap, targetParent);
+                        EditorActionManager.ExecuteAction(action);
+                        _dupeSelectionTargetedMap = ("None", null);
+                        _dupeSelectionTargetedParent = ("None", null);
+                        // Closes popup/menu bar
+                        //ImGui.CloseCurrentPopup();
+                    }
+
+                    ImGui.Separator();
+                    //end content
+                    if (ImGui.Button("Close"))
+                    {
+                        ImGui.CloseCurrentPopup();
+                    }
+                    ImGui.EndPopup();
                 }
 
                 ImGui.EndMenu();

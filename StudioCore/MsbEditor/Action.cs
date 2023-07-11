@@ -639,7 +639,7 @@ namespace StudioCore.MsbEditor
                                         {
                                             unk08s.Add(((MSBE.Part)newobj.WrappedObject).ModelName, 1001);
                                         }
-                                    ((MSBE.Part)newobj.WrappedObject).Unk08 = unk08s[((MSBE.Part)newobj.WrappedObject).ModelName];
+                                    ((MSBE.Part)newobj.WrappedObject).InstanceID = unk08s[((MSBE.Part)newobj.WrappedObject).ModelName];
                                     } //Is a region
                                     else if(newobj.Type == MapEntity.MapEntityType.Region)
                                     {
@@ -826,6 +826,40 @@ namespace StudioCore.MsbEditor
             {
                 Universe.Selection.ClearSelection();
             }
+            return ActionEvent.ObjectAddedRemoved;
+        }
+    }
+
+    public class MassSelectEntitiesBySubstring : Action
+    {
+        private Universe Universe;
+        private Scene.RenderScene Scene;
+        private Map Map;
+        private bool SetSelection;
+        private string MassSelectSubstring;
+
+        public MassSelectEntitiesBySubstring(Universe univ, Map map, string massSelectSubstring)
+        {
+            Universe = univ;
+            Map = map;
+            MassSelectSubstring = massSelectSubstring;
+        }
+
+        public override ActionEvent Execute()
+        {
+            List<Entity> massSelectedEntities = Map.GetObjectsByContainsSubstring(this.MassSelectSubstring).ToList();
+
+            Universe.Selection.ClearSelection();
+            foreach (var e in massSelectedEntities)
+            {
+                Universe.Selection.AddSelection(e);
+            }
+
+            return ActionEvent.ObjectAddedRemoved;
+        }
+
+        public override ActionEvent Undo()
+        {
             return ActionEvent.ObjectAddedRemoved;
         }
     }

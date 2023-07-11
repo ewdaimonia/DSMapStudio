@@ -101,6 +101,17 @@ namespace StudioCore.MsbEditor
             }
         }
 
+        public IEnumerable<Entity> GetObjectsByContainsSubstring(string name)
+        {
+            foreach (var m in Objects)
+            {
+                if (m.Name.Contains(name))
+                {
+                    yield return m;
+                }
+            }
+        }
+
         public byte GetNextUnique(string prop, byte value)
         {
             HashSet<byte> usedvals = new HashSet<byte>();
