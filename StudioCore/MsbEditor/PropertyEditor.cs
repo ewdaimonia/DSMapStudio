@@ -472,7 +472,7 @@ namespace StudioCore.MsbEditor
             IReadOnlyList<Param.Cell> cells = new List<Param.Cell>();
             if (selection.WrappedObject is Param.Row row)
             {
-                cells = row.CellHandles;
+                cells = row.Cells;
 
             }
             else if (selection.WrappedObject is MergedParamRow mrow)
@@ -510,7 +510,7 @@ namespace StudioCore.MsbEditor
             PropEditorPropInfoRow(row, idProp, "ID", ref id, null);
             ImGui.PopStyleColor();
 
-            foreach (var cell in row.Cells)
+            foreach (var cell in row.Columns)
             {
                 PropEditorPropCellRow(row[cell], ref id, null);
             }
@@ -596,6 +596,8 @@ namespace StudioCore.MsbEditor
             Cylinder,
             Box,
             Composite,
+            Rectangle,
+            Circle,
         }
 
         private string[] _regionShapes =
@@ -605,6 +607,8 @@ namespace StudioCore.MsbEditor
             "Cylinder",
             "Box",
             "Composite",
+            "Rectangle",
+            "Circle",
         };
 
         internal enum LightType
@@ -810,6 +814,12 @@ namespace StudioCore.MsbEditor
                                         break;
                                     case RegionShape.Composite:
                                         newshape = new MSB.Shape.Composite();
+                                        break;
+                                    case RegionShape.Rectangle:
+                                        newshape = new MSB.Shape.Rectangle();
+                                        break;
+                                    case RegionShape.Circle:
+                                        newshape = new MSB.Shape.Circle();
                                         break;
                                     default:
                                         throw new Exception("Invalid shape");

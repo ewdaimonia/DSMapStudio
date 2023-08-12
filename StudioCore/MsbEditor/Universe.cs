@@ -141,7 +141,7 @@ namespace StudioCore.MsbEditor
 
         public RenderableProxy GetRegionDrawable(Map map, Entity obj)
         {
-            if (obj.WrappedObject is IMsbRegion r && r.Shape is MSB.Shape.Box b)
+            if (obj.WrappedObject is IMsbRegion r && r.Shape is MSB.Shape.Box )
             {
                 var mesh = DebugPrimitiveRenderableProxy.GetBoxRegionProxy(_renderScene);
                 mesh.World = obj.GetWorldMatrix();
@@ -173,7 +173,32 @@ namespace StudioCore.MsbEditor
                 mesh.DrawFilter = RenderFilter.Region;
                 return mesh;
             }
-            return null;
+            else if (obj.WrappedObject is IMsbRegion r5 && r5.Shape is MSB.Shape.Composite co)
+            {
+                // Not fully implemented. Temporarily uses point region marker.
+                var mesh = DebugPrimitiveRenderableProxy.GetPointRegionProxy(_renderScene);
+                mesh.World = obj.GetWorldMatrix();
+                mesh.SetSelectable(obj);
+                mesh.DrawFilter = RenderFilter.Region;
+                return mesh;
+            }
+            else if (obj.WrappedObject is IMsbRegion r6 && r6.Shape is MSB.Shape.Rectangle re)
+            {
+                var mesh = DebugPrimitiveRenderableProxy.GetBoxRegionProxy(_renderScene);
+                mesh.World = obj.GetWorldMatrix();
+                mesh.SetSelectable(obj);
+                mesh.DrawFilter = RenderFilter.Region;
+                return mesh;
+            }
+            else if (obj.WrappedObject is IMsbRegion r7 && r7.Shape is MSB.Shape.Circle ci)
+            {
+                var mesh = DebugPrimitiveRenderableProxy.GetCylinderRegionProxy(_renderScene);
+                mesh.World = obj.GetWorldMatrix();
+                mesh.SetSelectable(obj);
+                mesh.DrawFilter = RenderFilter.Region;
+                return mesh;
+            }
+            throw new NotSupportedException($"No region model proxy was specified for {obj.WrappedObject.GetType()}");
         }
 
         public RenderableProxy GetLightDrawable(Map map, Entity obj)
