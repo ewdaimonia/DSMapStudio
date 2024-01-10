@@ -693,6 +693,18 @@ namespace StudioCore.MsbEditor
                         }
                     }
 
+                    if (ImGui.MenuItem("Increment All EntityIds", null, false, _selection.IsSelection()))
+                    {
+                        var action = new IncrementAllEntityIdsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, DupIncrement);
+                        EditorActionManager.ExecuteAction(action);
+                    }
+
+                    if (ImGui.MenuItem("Shift Entities", null, false, _selection.IsSelection()))
+                    {
+                        var action = new ShiftEntitiesAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), XPosOffset, YPosOffset, ZPosOffset);
+                        EditorActionManager.ExecuteAction(action);
+                    }
+
                     if (ImGui.BeginCombo("Targeted Map", _dupeSelectionTargetedMap.Item1))
                     {
                         foreach (var obj in Universe.LoadedObjectContainers)

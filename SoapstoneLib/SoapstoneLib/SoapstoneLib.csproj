@@ -4,6 +4,7 @@
     <TargetFramework>net7.0</TargetFramework>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
     <LangVersion>11</LangVersion>
+    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 
   <ItemGroup>

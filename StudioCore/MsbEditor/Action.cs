@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using SoulsFormats;
 using StudioCore.Editor;
+using static StudioCore.MsbEditor.MapEntity;
 
 namespace StudioCore.MsbEditor
 {
@@ -520,6 +521,134 @@ namespace StudioCore.MsbEditor
                     Universe.Selection.AddSelection(c);
                 }
             }
+            return ActionEvent.ObjectAddedRemoved;
+        }
+    }
+
+    public class IncrementAllEntityIdsAction : Action
+    {
+        private Universe Universe;
+        private Scene.RenderScene Scene;
+        private List<MapEntity> Entities = new List<MapEntity>();
+        private Map TargetMap;
+        private int? IncrementAmount = null;
+
+        public IncrementAllEntityIdsAction(Universe univ, Scene.RenderScene scene, List<MapEntity> objects, bool setSelection, int incrementAmount)
+        {
+            Universe = univ;
+            Scene = scene;
+            Entities.AddRange(objects);
+            IncrementAmount = incrementAmount;
+        }
+
+        public override ActionEvent Execute()
+        {
+            var objectnames = new Dictionary<string, HashSet<string>>();
+            Dictionary<Map, HashSet<MapEntity>> mapPartEntities = new();
+
+            for (int i = 0; i < Entities.Count(); i++)
+            {
+                if (Entities[i].MapID == null)
+                {
+#if DEBUG
+                    TaskManager.warningList.TryAdd("FailedDupeNoMapID" + Entities[i].Name, $"DEBUG Failed to dupe {Entities[i].Name}, as it had no defined MapID");
+#endif
+                    continue;
+                }
+
+                Map? m;
+                if (TargetMap != null)
+                {
+                    m = Universe.GetLoadedMap(TargetMap.Name);
+                }
+                else
+                {
+                    m = Universe.GetLoadedMap(Entities[i].MapID);
+                }
+                if (m != null)
+                {
+                    MapEntity currobj = (MapEntity)Entities[i];
+
+                    if (currobj.Type == MapEntityType.Region && IncrementAmount != null && ((MSBE.Region)currobj.WrappedObject).EntityID != 0)
+                    {
+                        ((MSBE.Region)currobj.WrappedObject).EntityID = Convert.ToUInt32(((MSBE.Region)currobj.WrappedObject).EntityID + IncrementAmount.Value);
+                    }
+                    if (currobj.Type == MapEntityType.Part && IncrementAmount != null && ((MSBE.Part)currobj.WrappedObject).EntityID != 0)
+                    {
+                        ((MSBE.Part)currobj.WrappedObject).EntityID = Convert.ToUInt32(((MSBE.Part)currobj.WrappedObject).EntityID + IncrementAmount.Value);
+                    }
+                    if (currobj.Type == MapEntityType.Part && IncrementAmount != null)
+                    {
+                        for (int j = 0; j < 8; j++)
+                        {
+                            if (((MSBE.Part)currobj.WrappedObject).EntityGroupIDs[j] != 0) {
+                                ((MSBE.Part)currobj.WrappedObject).EntityGroupIDs[j] = Convert.ToUInt32(((MSBE.Part)currobj.WrappedObject).EntityGroupIDs[j] + IncrementAmount.Value);
+                            }
+                        }
+                    }
+                    if (currobj.Type == MapEntityType.Event && IncrementAmount != null && ((MSBE.Event)currobj.WrappedObject).EntityID != 0)
+                    {
+                        ((MSBE.Event)currobj.WrappedObject).EntityID = Convert.ToUInt32(((MSBE.Event)currobj.WrappedObject).EntityID + IncrementAmount.Value);
+                    }
+                }
+            }
+            return ActionEvent.ObjectAddedRemoved;
+        }
+
+        public override ActionEvent Undo()
+        {
+            return ActionEvent.ObjectAddedRemoved;
+        }
+    }
+
+    public class ShiftEntitiesAction : Action
+    {
+        private Universe Universe;
+        private Scene.RenderScene Scene;
+        private List<MapEntity> Objs = new List<MapEntity>();
+        private float XPosOffset = 0;
+        private float YPosOffset = 0;
+        private float ZPosOffset = 0;
+
+        public ShiftEntitiesAction(Universe univ, Scene.RenderScene scene, List<MapEntity> objects, float XPosOffset, float YPosOffset, float ZPosOffset)
+        {
+            Universe = univ;
+            Scene = scene;
+            Objs = objects;
+            this.XPosOffset = XPosOffset;
+            this.YPosOffset = YPosOffset;
+            this.ZPosOffset = ZPosOffset;
+        }
+
+        public override ActionEvent Execute()
+        {
+            for (int i = 0; i < Objs.Count(); i++) {
+            var m = Universe.GetLoadedMap(Objs[i].MapID);
+            if (m != null)
+            {
+                    //Is a map part
+                    if (Objs[i].Type == MapEntity.MapEntityType.Part)//msbObj is MSBE.Part part <- casts right in the check
+                    {
+                        ((MSBE.Part)Objs[i].WrappedObject).Position = new System.Numerics.Vector3(
+                            ((MSBE.Part)Objs[i].WrappedObject).Position.X + XPosOffset,
+                            ((MSBE.Part)Objs[i].WrappedObject).Position.Y + ZPosOffset,
+                            ((MSBE.Part)Objs[i].WrappedObject).Position.Z + YPosOffset
+                        );
+                    } //Is a region
+                    else if (Objs[i].Type == MapEntity.MapEntityType.Region)
+                    {
+                        ((MSBE.Region)Objs[i].WrappedObject).Position = new System.Numerics.Vector3(
+                            ((MSBE.Region)Objs[i].WrappedObject).Position.X + XPosOffset,
+                            ((MSBE.Region)Objs[i].WrappedObject).Position.Y + ZPosOffset,
+                            ((MSBE.Region)Objs[i].WrappedObject).Position.Z + YPosOffset
+                        );
+                    }
+                }
+            }
+            return ActionEvent.ObjectAddedRemoved;
+        }
+        public override ActionEvent Undo()
+        {
             return ActionEvent.ObjectAddedRemoved;
         }
     }

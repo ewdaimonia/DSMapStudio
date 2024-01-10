@@ -4,6 +4,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net7.0-windows</TargetFramework>
     <LangVersion>11</LangVersion>
+    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 
   <ItemGroup>
