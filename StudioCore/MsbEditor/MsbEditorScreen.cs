@@ -603,12 +603,17 @@ namespace StudioCore.MsbEditor
                     {
                         this.DupIncrement = DupIncrement;
                     }
-                    ImGui.Separator();
+                    if (ImGui.MenuItem("Increment All EntityIds", null, false, _selection.IsSelection()))
+                    {
+                        var action = new IncrementAllEntityIdsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, DupIncrement);
+                        EditorActionManager.ExecuteAction(action);
+                    }
                     if (ImGui.MenuItem("Duplicate and Increment IDs", null, false, _selection.IsSelection()))
                     {
                         var action = new CloneMapObjectsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, DupIncrement);
                         EditorActionManager.ExecuteAction(action);
                     }
+                    ImGui.Separator();
                     if (ImGui.InputInt("XColumns", ref XWidth, 1, 10))
                     {
                         this.XWidth = XWidth;
@@ -645,10 +650,10 @@ namespace StudioCore.MsbEditor
                     {
                         this.ZPosOffset = ZPosOffset;
                     }
-                    if (ImGui.InputInt("Is overworld?", ref IsOverworld, 1, 10))
-                    {
-                        this.IsOverworld = IsOverworld;
-                    }
+                    //if (ImGui.InputInt("Is overworld?", ref IsOverworld, 1, 10))
+                    //{
+                    //    this.IsOverworld = IsOverworld;
+                    //}
                     ImGui.Separator();
                     if (ImGui.MenuItem("Generate Grid Dungeon", null, false, _selection.IsSelection()))
                     {
@@ -670,7 +675,7 @@ namespace StudioCore.MsbEditor
                         }
                     }
                     ImGui.Separator();
-                    ImGui.Text("Mass Clone to Adjacent Maps");
+                    //ImGui.Text("Mass Clone to Adjacent Maps");
                     //ImGui.Text("Entity Keyword");
                     if (ImGui.InputText("Entity Keyword", ref MassCloneEntityKeyword, 64))
                     {
@@ -693,70 +698,64 @@ namespace StudioCore.MsbEditor
                         }
                     }
 
-                    if (ImGui.MenuItem("Increment All EntityIds", null, false, _selection.IsSelection()))
-                    {
-                        var action = new IncrementAllEntityIdsAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), true, DupIncrement);
-                        EditorActionManager.ExecuteAction(action);
-                    }
-
                     if (ImGui.MenuItem("Shift Entities", null, false, _selection.IsSelection()))
                     {
                         var action = new ShiftEntitiesAction(Universe, RenderScene, _selection.GetFilteredSelection<MapEntity>().ToList(), XPosOffset, YPosOffset, ZPosOffset);
                         EditorActionManager.ExecuteAction(action);
                     }
 
-                    if (ImGui.BeginCombo("Targeted Map", _dupeSelectionTargetedMap.Item1))
-                    {
-                        foreach (var obj in Universe.LoadedObjectContainers)
-                        {
-                            if (obj.Value != null)
-                            {
-                                if (ImGui.Selectable(obj.Key))
-                                {
-                                    _dupeSelectionTargetedMap = (obj.Key, obj.Value);
-                                    break;
-                                }
-                            }
-                        }
-                        ImGui.EndCombo();
-                    }
-                    //if (_dupeSelectionTargetedMap.Item2 == null)
-                    //    return;
+                    //if (ImGui.BeginCombo("Targeted Map", _dupeSelectionTargetedMap.Item1))
+                    //{
+                    //    foreach (var obj in Universe.LoadedObjectContainers)
+                    //    {
+                    //        if (obj.Value != null)
+                    //        {
+                    //            if (ImGui.Selectable(obj.Key))
+                    //            {
+                    //                _dupeSelectionTargetedMap = (obj.Key, obj.Value);
+                    //                break;
+                    //            }
+                    //        }
+                    //    }
+                    //    ImGui.EndCombo();
+                    //}
+                    ////if (_dupeSelectionTargetedMap.Item2 == null)
+                    ////    return;
 
-                    Map targetMap = (Map)_dupeSelectionTargetedMap.Item2;
+                    //Map targetMap = (Map)_dupeSelectionTargetedMap.Item2;
 
-                    var sel = _selection.GetFilteredSelection<MapEntity>().ToList();
+                    //var sel = _selection.GetFilteredSelection<MapEntity>().ToList();
 
-                    if (sel.Any(e => e.WrappedObject is BTL.Light))
-                    {
-                        if (ImGui.BeginCombo("Targeted BTL", _dupeSelectionTargetedParent.Item1))
-                        {
-                            foreach (Entity btl in targetMap.BTLParents)
-                            {
-                                var ad = (AssetDescription)btl.WrappedObject;
-                                if (ImGui.Selectable(ad.AssetName))
-                                {
-                                    _dupeSelectionTargetedParent = (ad.AssetName, btl);
-                                    break;
-                                }
-                            }
-                            ImGui.EndCombo();
-                        }
-                        //if (_dupeSelectionTargetedParent.Item2 == null)
-                        //    return;
-                    }
+                    //if (sel.Any(e => e.WrappedObject is BTL.Light))
+                    //{
+                    //    if (ImGui.BeginCombo("Targeted BTL", _dupeSelectionTargetedParent.Item1))
+                    //    {
+                    //        foreach (Entity btl in targetMap.BTLParents)
+                    //        {
+                    //            var ad = (AssetDescription)btl.WrappedObject;
+                    //            if (ImGui.Selectable(ad.AssetName))
+                    //            {
+                    //                _dupeSelectionTargetedParent = (ad.AssetName, btl);
+                    //                break;
+                    //            }
+                    //        }
+                    //        ImGui.EndCombo();
+                    //    }
+                    //    //if (_dupeSelectionTargetedParent.Item2 == null)
+                    //    //    return;
+                    //}
 
-                    if (ImGui.Button("Clone and offset to secondary map"))
-                    {
-                        Entity? targetParent = _dupeSelectionTargetedParent.Item2;
+                    //if (ImGui.Button("Clone and offset to secondary map"))
+                    //{
+                    //    Entity? targetParent = _dupeSelectionTargetedParent.Item2;
 
-                        var action = new CloneMapObjectsAction(Universe, RenderScene, sel, true, targetMap, targetParent);
-                        EditorActionManager.ExecuteAction(action);
-                        _dupeSelectionTargetedMap = ("None", null);
-                        _dupeSelectionTargetedParent = ("None", null);
-                        // Closes popup/menu bar
-                        //ImGui.CloseCurrentPopup();
-                    }
+                    //    var action = new CloneMapObjectsAction(Universe, RenderScene, sel, true, targetMap, targetParent);
+                    //    EditorActionManager.ExecuteAction(action);
+                    //    _dupeSelectionTargetedMap = ("None", null);
+                    //    _dupeSelectionTargetedParent = ("None", null);
+                    //    // Closes popup/menu bar
+                    //    //ImGui.CloseCurrentPopup();
+                    //}
 
                     ImGui.Separator();
                     //end content
