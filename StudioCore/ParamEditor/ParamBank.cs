@@ -269,6 +269,7 @@ namespace StudioCore.ParamEditor
                     newParm.GetCellHandleOrThrow("backhomeBattleDist").SetValue((UInt16)9999);
                     newParm.GetCellHandleOrThrow("BackHomeLife_OnHitEneWal").SetValue((Single)0);
                     newParm.GetCellHandleOrThrow("backToHomeStuckAct").SetValue((Byte)1);
+                    newParm.GetCellHandleOrThrow("TeamAttackEffectivity").SetValue((Byte)0);
 
                     newParm.Name = $"AUTOGENNED {curr.Name}";
                     newParm.ID += 800000000;
